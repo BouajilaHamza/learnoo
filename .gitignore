@@ -1,0 +1,25 @@
+# Local secrets and environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Dependencies and generated outputs
+node_modules/
+dist/
+build/
+coverage/
+*.test
+
+# Runtime data and backups
+/data/
+/media/
+/backups/
+*.dump
+*.sql.gz
+
+# Local tools and OS
+.DS_Store
+.idea/
+.vscode/
