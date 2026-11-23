@@ -10,6 +10,14 @@ Use focused branches and pull requests. Describe the problem, resulting behavior
 
 Tests should cover meaningful risks: authorization, submitted-content immutability, publication races, lesson withdrawal, rendering safety, and recovery. Avoid broad scaffolding or unrelated dependencies. Document runnable setup when the prototype exists.
 
+## Agent skills
+
+Canonical skills are in [.agents/skills/](.agents/skills/). `.claude/skills` is a relative symlink to `../.agents/skills`, so both tools read one maintained copy. Windows contributors may need Developer Mode or other symlink permissions and Git symlink support enabled before checkout; verify this path is a directory link, not a text file. Do not maintain duplicate copies.
+
+Discovery paths were checked against the [Codex skills docs](https://developers.openai.com/codex/skills/) and [Claude Code skills docs](https://code.claude.com/docs/en/skills) on 2026-11-23. Codex documents `.agents/skills`; Claude Code documents `.claude/skills` and symlinked skill folders. The docs do not explicitly guarantee a symlink at the parent `skills` directory itself. This repository verifies filesystem resolution; end-to-end discovery of this exact layout in both clients remains to be confirmed. Check that the three `learnoo-*` skills appear in your client's skill selector before relying on automatic selection; if missing, read the canonical files explicitly and report the client/version. No runtime discovery claim is implied by valid Markdown alone.
+
+Optional UI/UX skills and pinned upstream licenses are listed in [recommended skills](.agents/RECOMMENDED_SKILLS.md). The shared skills grant no additional tool permissions or merge authority.
+
 ## Educational workflow
 
 Teachers will use Studio, not GitHub. Content must have a curriculum objective, clear explanation, sources/rights information, and a different qualified reviewer. AI-generated material is subject to the same review requirements.

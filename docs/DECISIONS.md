@@ -70,3 +70,9 @@ The renderer experiment may use a clearly labeled, unreviewed handwritten JSON f
 Use complex numbers (algebraic form and modulus) provisionally for the technical test. The sample is French; intentionally mixed Arabic/French content lives in a separate RTL fixture. This does not select the first published chapter or claim teacher approval. The initial video slot has no chosen video.
 
 The prototype schema is a small typed JSON format; TipTap compatibility remains to be implemented and tested in LRN-003. The initial program is bound to loopback and is not the authenticated learning platform.
+
+## Project agent skills
+
+Maintain three concise skills in `.agents/skills`: editorial invariants, security and code review. `.claude/skills` links to the same directory. Existing project documents remain authoritative; skills do not settle open licensing, email-verification, renderer or operational decisions. Discovery paths are documented in [CONTRIBUTING.md](../CONTRIBUTING.md), including the unverified parent-symlink client-discovery limitation and Windows setup caveat. External UI skills are optional, pinned recommendations only; no third-party skills are copied into the repo.
+
+Defer `learnoo-rtl-math` until LRN-004's remaining renderer checks are resolved, using the [existing experiment results](RENDERER_EXPERIMENT.md). Defer `learnoo-ui` until LRN-002's wireframes establish implementable guidance. The homepage concept is not a completed wireframe package. No teaching validation or operational completion is implied by these skills.
