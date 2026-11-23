@@ -74,3 +74,8 @@ The prototype schema is a small typed JSON format; TipTap compatibility remains 
 ## Shared design foundations
 
 The maintainer selected Udemy-inspired styling as an adjustable starting point. Adapt the Refero reference into Learnoo design guidance, canonical JSON tokens, generated CSS variables and a Tailwind v4 theme. Keep the infinity identity, green/orange accents, French scientific content with optional Arabic explanations, lightweight delivery and the existing motion policy. Use one token source across the Go reader and future Studio; do not import a foreign DESIGN.md as project authority. This does not complete LRN-002 wireframes or finalize the Studio build. See [DESIGN.md](../DESIGN.md).
+## Project agent skills
+
+Maintain three concise skills in `.agents/skills`: editorial invariants, security and code review. `.claude/skills` links to the same directory. Existing project documents remain authoritative; skills do not settle open licensing, email-verification, renderer or operational decisions. Discovery paths are documented in [CONTRIBUTING.md](../CONTRIBUTING.md), including reported Claude Code discovery, the remaining Codex skill-selector check and Windows setup caveat. External UI skills are optional, pinned recommendations only; no third-party skills are copied into the repo.
+
+Defer `learnoo-rtl-math` until LRN-004's remaining renderer checks are resolved, using the [existing experiment results](RENDERER_EXPERIMENT.md). Defer `learnoo-ui` until LRN-002's wireframes establish implementable guidance. The homepage concept is not a completed wireframe package. No teaching validation or operational completion is implied by these skills.
