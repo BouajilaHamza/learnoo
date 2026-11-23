@@ -38,6 +38,7 @@ The reader consumes generated design tokens. Edit `web/design/tokens.json`, run 
 
 ```sh
 npm run design:check
+npm run design:contrast
 go test ./...
 go vet ./...
 npx playwright install chromium
@@ -45,7 +46,7 @@ npm run test:browser
 go test ./internal/rendering -run '^$' -bench BenchmarkRenderLesson -benchmem
 ```
 
-Playwright starts a loopback server automatically (or reuses an existing local server outside CI). Results and screenshots are written to ignored `test-results/`. Run `npm run assets` before compiling: Go embeds the prepared local browser assets into the binary.
+Playwright always starts its own loopback server on port 18080 and refuses to reuse an existing process, in development and CI alike. Set `LEARNOO_TEST_PORT=18081` to select another port. Tests derive URLs and request-origin checks from this configuration; the interactive preview on 8080 is independent. Results and screenshots are written to ignored `test-results/`. Run `npm run assets` before compiling: Go embeds the prepared local browser assets into the binary.
 
 For a restricted environment, put the Go build cache in a writable temporary directory by prefixing commands with `GOCACHE=/tmp/learnoo-go-cache`.
 

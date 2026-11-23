@@ -1,12 +1,13 @@
 # Shared design exports
 
-The direction and component guidance live in [DESIGN.md](../../DESIGN.md). These are Learnoo adaptations informed by [Refero's Udemy reference](https://styles.refero.design/style/c03afcbd-96ed-4b7f-8d0a-277fc0042ba7), not downloaded Udemy source components.
+The direction and component guidance live in [DESIGN.md](../../DESIGN.md). Shared semantic colours use Radix Blue, Slate, Amber, Red and Grass; see [palette provenance and roles](PALETTE.md). There is no Refero runtime or build dependency.
 
 ## Edit and generate
 
 ```sh
 npm run design:build
 npm run design:check
+npm run design:contrast
 ```
 
 Edit only `tokens.json` for shared values. The dependency-free generator writes `tokens.css`, `tailwind.css` and the identical Go-embedded `internal/rendering/static/tokens.css`. All three outputs are committed for inspection; `npm run assets` regenerates them before copying KaTeX assets. Rebuild/restart Go after changes because the binary embeds CSS.

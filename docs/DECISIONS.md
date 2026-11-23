@@ -79,3 +79,15 @@ The maintainer selected Udemy-inspired styling as an adjustable starting point. 
 Maintain three concise skills in `.agents/skills`: editorial invariants, security and code review. `.claude/skills` links to the same directory. Existing project documents remain authoritative; skills do not settle open licensing, email-verification, renderer or operational decisions. Discovery paths are documented in [CONTRIBUTING.md](../CONTRIBUTING.md), including reported Claude Code discovery, the remaining Codex skill-selector check and Windows setup caveat. External UI skills are optional, pinned recommendations only; no third-party skills are copied into the repo.
 
 Defer `learnoo-rtl-math` until LRN-004's remaining renderer checks are resolved, using the [existing experiment results](RENDERER_EXPERIMENT.md). Defer `learnoo-ui` until LRN-002's wireframes establish implementable guidance. The homepage concept is not a completed wireframe package. No teaching validation or operational completion is implied by these skills.
+
+## Refero palette adoption for the landing preview
+
+The maintainer requested direct use of the Udemy reference exports on 2026-11-23, superseding the earlier green/orange visual adaptation. All four extended exports are retained under web/design/refero-udemy; the landing page loads the exported variables. Preserve the official Learnoo artwork. Existing educational, authentication and motion requirements remain in force. This is a local visual preview, not a launch or a completed UI kit.
+
+## Future catalogue homepage concept
+
+On 2026-11-23 the maintainer requested a landing page depicting the populated future product across BAC sections and courses. The local preview now includes an illustrative catalogue with browser-side section/subject/search filters. Course and account dialogs clearly distinguish the concept from published content and implemented accounts. This does not expand the mathematics pilot, establish curriculum alignment, or authorize public deployment.
+
+## Shared Blue and Slate palette and prototype fixes
+
+On 2026-11-23 the maintainer approved replacing the temporary direct Udemy palette with Learnoo semantic tokens derived from Radix Blue/Slate, plus Amber/Grass/Red statuses. This supersedes the earlier direct Refero-export adoption. Both reader and catalogue deliberately use the shared system; unreviewed warnings have independent amber tokens. Refero exports remain ignored local references, with no build or runtime dependency. The served wordmark is a 12 KB WebP. Arabic headings and inline punctuation are corrected, and browser tests always start an isolated server on a configurable test port (default 18080). These changes do not establish production accessibility or teacher validation.

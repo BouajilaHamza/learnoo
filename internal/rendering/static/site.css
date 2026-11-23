@@ -22,7 +22,7 @@ nav { display: flex; flex-wrap: wrap; gap: var(--learnoo-space-5); font-size: va
 nav a { display: inline-flex; align-items: center; min-block-size: var(--learnoo-size-touch); }
 a { color: var(--learnoo-color-brand); text-underline-offset: 0.2em; }
 a:hover { color: var(--learnoo-color-brand-hover); }
-.notice { background: var(--learnoo-color-accent-soft); border-block: 1px solid var(--learnoo-color-border); padding: var(--learnoo-space-3) var(--learnoo-space-6); text-align: center; color: var(--learnoo-color-accent); font-size: var(--learnoo-text-small); }
+.notice { background: var(--learnoo-color-warning-background); border-block: 1px solid var(--learnoo-color-warning-border); padding: var(--learnoo-space-3) var(--learnoo-space-6); text-align: center; color: var(--learnoo-color-warning-text); font-size: var(--learnoo-text-small); }
 main { max-width: var(--learnoo-width-reader); margin: var(--learnoo-space-12) auto; padding: var(--learnoo-space-8); background: var(--learnoo-color-surface); border: 1px solid var(--learnoo-color-border); border-radius: var(--learnoo-radius-panel); }
 .eyebrow { font-size: var(--learnoo-text-caption); font-weight: var(--learnoo-weight-emphasis); color: var(--learnoo-color-muted); }
 .eyebrow span { margin-inline: var(--learnoo-space-2); }
@@ -59,7 +59,7 @@ footer { font-size: var(--learnoo-text-caption); color: var(--learnoo-color-mute
 .skip:focus { inset-block-start: 0; }
 a:focus-visible, button:focus-visible, summary:focus-visible, textarea:focus-visible { outline: 3px solid var(--learnoo-color-focus); outline-offset: 4px; }
 [dir=rtl] { text-align: start; }
-:lang(ar):not(.math):not(.math *) { font-family: var(--learnoo-font-arabic); line-height: var(--learnoo-leading-arabic); letter-spacing: normal; }
+:lang(ar):not(.math):not(.math *) { font-family: var(--learnoo-font-arabic); letter-spacing: normal; }
 li { padding-inline-start: var(--learnoo-space-1); }
 p, li, h1, h2, h3 { overflow-wrap: anywhere; }
 .lab { max-width: var(--learnoo-width-page); }
@@ -79,3 +79,6 @@ p, li, h1, h2, h3 { overflow-wrap: anywhere; }
   .lab-grid { grid-template-columns: minmax(0, 1fr); }
   .lab textarea { height: 350px; }
 }
+
+p:lang(ar), li:lang(ar) { line-height: var(--learnoo-leading-arabic); }
+h1:lang(ar), h2:lang(ar), h3:lang(ar) { line-height: var(--learnoo-leading-heading); }
