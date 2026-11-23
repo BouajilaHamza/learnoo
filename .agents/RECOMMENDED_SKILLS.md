@@ -6,7 +6,6 @@ These are optional local tools, not repository dependencies or instructions to i
 | --- | --- | --- | --- |
 | [pbakaus/impeccable](https://github.com/pbakaus/impeccable) | UI/UX and accessibility work within the assigned design task | [`b49177d32788f2dc585c42831d845dacf1ebed2c`](https://github.com/pbakaus/impeccable/tree/b49177d32788f2dc585c42831d845dacf1ebed2c) | [Apache-2.0](https://github.com/pbakaus/impeccable/blob/b49177d32788f2dc585c42831d845dacf1ebed2c/LICENSE) |
 | [emilkowalski/skills](https://github.com/emilkowalski/skills) | Optional `emil-design-eng` guidance for small UI polish only | [`64eb3deb9a5fbfa041faf783e0bc3fd635872e9c`](https://github.com/emilkowalski/skills/tree/64eb3deb9a5fbfa041faf783e0bc3fd635872e9c) | [MIT](https://github.com/emilkowalski/skills/blob/64eb3deb9a5fbfa041faf783e0bc3fd635872e9c/LICENSE) |
-
 | [prototype](https://github.com/emilkowalski/skills/blob/64eb3deb9a5fbfa041faf783e0bc3fd635872e9c/skills/prototype/SKILL.md) | Explicitly requested UI variants for LRN-002; stay within the assigned wireframe scope and motion policy | Same Emil commit above | MIT, same license above |
 | [pick-ui-library](https://github.com/emilkowalski/skills/blob/64eb3deb9a5fbfa041faf783e0bc3fd635872e9c/skills/pick-ui-library/SKILL.md) | Explicitly requested Studio library evaluation; respect existing choices and avoid dependency churn | Same Emil commit above | MIT, same license above |
 
