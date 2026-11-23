@@ -19,6 +19,7 @@ go run ./cmd/renderer
 
 Open http://127.0.0.1:8080/lesson. Change the local port with `go run ./cmd/renderer -port 8081`.
 
+- `/`: landing-page UI example; local only, no registration or publication.
 - `/lesson`: unreviewed French complex-numbers fixture.
 - `/bidi`: isolated Arabic/French directionality fixture.
 - `/failure`: intentionally invalid formula with readable fallback.
