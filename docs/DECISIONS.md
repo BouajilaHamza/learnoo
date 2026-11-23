@@ -70,3 +70,7 @@ The renderer experiment may use a clearly labeled, unreviewed handwritten JSON f
 Use complex numbers (algebraic form and modulus) provisionally for the technical test. The sample is French; intentionally mixed Arabic/French content lives in a separate RTL fixture. This does not select the first published chapter or claim teacher approval. The initial video slot has no chosen video.
 
 The prototype schema is a small typed JSON format; TipTap compatibility remains to be implemented and tested in LRN-003. The initial program is bound to loopback and is not the authenticated learning platform.
+
+## Shared design foundations
+
+The maintainer selected Udemy-inspired styling as an adjustable starting point. Adapt the Refero reference into Learnoo design guidance, canonical JSON tokens, generated CSS variables and a Tailwind v4 theme. Keep the infinity identity, green/orange accents, French scientific content with optional Arabic explanations, lightweight delivery and the existing motion policy. Use one token source across the Go reader and future Studio; do not import a foreign DESIGN.md as project authority. This does not complete LRN-002 wireframes or finalize the Studio build. See [DESIGN.md](../DESIGN.md).

@@ -29,9 +29,14 @@ Browser-side KaTeX is copied from the pinned npm package and served locally with
 
 The JSON laboratory is not TipTap. No server-side draft storage or approval behavior is simulated. See [fixture details](fixtures/README.md).
 
+## Design foundations
+
+The reader consumes generated design tokens. Edit `web/design/tokens.json`, run `npm run design:build`, and rebuild the Go server. See [shared design exports](../web/design/README.md) for plain CSS and future Tailwind v4 Studio integration.
+
 ## Verify
 
 ```sh
+npm run design:check
 go test ./...
 go vet ./...
 npx playwright install chromium
