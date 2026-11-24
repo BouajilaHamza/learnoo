@@ -122,3 +122,14 @@ Confirmed by the maintainer on 2026-11-24, as proposed in [CAHIER_DES_CHARGES.md
 | Administrator | `administrator`, `publisher`, `author` | `reviewer` per subject |
 
 Each permission is granted and checked separately on the server. Reviewing never implies publishing. Nobody approves their own revision. Administrators review educational content only in subjects they are assigned to. This unblocks the permission tables and default grants in LRN-005 and the role administration CLI (LRN-013).
+
+## Media upload limits (LRN-006)
+
+Implementer choices for the media slice on 2026-11-24, in `internal/media` (not yet wired to the database or HTTP):
+
+- Accepted: PNG, JPEG and WebP only, detected from magic bytes; filename and client `Content-Type` are never trusted. A declared type that disagrees with the content is rejected. SVG, GIF, BMP and everything else are rejected.
+- Limits: 5 MiB upload (read through a limit; larger input is rejected, not truncated), 4096 px per side, 16 megapixels. Dimensions are checked from the header before the full decode (decompression-bomb defence); the full decode must then succeed and match the header.
+- Re-encoding: the decoded pixels are always re-encoded, so stored bytes carry no trailing or polyglot data, EXIF/GPS, text chunks or ICC profiles. PNG is stored as PNG and JPEG as JPEG at fixed quality 90. Go's standard library cannot encode WebP, so WebP is decoded with `golang.org/x/image/webp` and stored as lossless PNG with `content_type` `image/png`.
+- Known limitations: JPEG EXIF orientation is dropped, so camera photos that rely on it may appear rotated (authors should export upright images); dropping ICC profiles may shift colours slightly in wide-gamut images. Re-encoding a JPEG loses some quality, and WebP stored as PNG can be larger than the upload.
+- Storage: content-addressed and immutable. The key is `<sha256>.<png|jpg>`, where the SHA-256 is of the stored (re-encoded) bytes, at `ab/cd/<key>` under the media directory. Files are written to a temporary file in the same directory, fsynced, made read-only (0444) and hard-linked into place, so an existing key is never overwritten; identical concurrent writes are idempotent and a different file under an existing key is reported as a conflict. Directories are created 0750. Keys are validated against `^[0-9a-f]{64}\.(png|jpg)$` and all access goes through `os.Root`, so no key can reach outside the directory.
+- Replacing an image means uploading a new asset. Uploads whose canonical bytes are identical share one SHA-256 and therefore one asset (the database `sha256` is unique); that is safe because assets never change.
