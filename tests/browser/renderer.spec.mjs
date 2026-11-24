@@ -44,6 +44,17 @@ test('measure cold mobile payload and desktop rendering',async({page})=>{
  await page.setViewportSize({width:1440,height:1000});await page.screenshot({path:'test-results/lesson-desktop.png',fullPage:true});
 });
 
+test('compact 375px mobile viewport prevents horizontal overflow on complex formulas', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 667 });
+  await page.goto('/lesson');
+  await expect(page.locator('.katex').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+
+  await page.goto('/bidi');
+  await expect(page.locator('.katex').first()).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
 test('reader preserves inline punctuation, warning contrast roles and Arabic heading rhythm', async ({ browser, baseURL }) => {
  const context = await browser.newContext({ javaScriptEnabled: false });
  const page = await context.newPage();

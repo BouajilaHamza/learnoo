@@ -93,3 +93,57 @@ func BenchmarkRenderLesson(b *testing.B) {
 		}
 	}
 }
+
+func TestBidirectionalMathRendering(t *testing.T) {
+	doc := Document{
+		SchemaVersion: 1,
+		Title:         "Test Directional Math",
+		Language:      "ar",
+		Status:        "unreviewed",
+		Objective:     "Verify RTL wrapping and math isolation",
+		Blocks: []Node{
+			{
+				Type: "paragraph",
+				Lang: "ar",
+				Dir:  "rtl",
+				Children: []Node{
+					{Type: "text", Text: "العدد المركب ", Lang: "ar", Dir: "rtl"},
+					{Type: "math", Text: "z = a + ib"},
+					{Type: "text", Text: " ينتمي إلى ", Lang: "ar", Dir: "rtl"},
+					{Type: "math", Text: "\\mathbb{C}"},
+				},
+			},
+			{
+				Type: "displayMath",
+				Text: "\\operatorname{Re}(z) = a",
+			},
+			{
+				Type:    "youtube",
+				Title:   "شرح بالفيديو",
+				VideoID: "dQw4w9WgXcQ",
+			},
+			{
+				Type:  "youtube",
+				Title: "بدون فيديو",
+			},
+		},
+	}
+	html, err := Render(doc)
+	if err != nil {
+		t.Fatalf("Render failed: %v", err)
+	}
+
+	out := string(html)
+	if !strings.Contains(out, `<span class="math" dir="ltr" data-display="false">z = a &#43; ib</span>`) {
+		t.Errorf("inline math missing isolated dir=\"ltr\" wrapper")
+	}
+	if !strings.Contains(out, `<div class="math" dir="ltr" data-display="true">\operatorname{Re}(z) = a</div>`) {
+		t.Errorf("display math missing isolated dir=\"ltr\" wrapper")
+	}
+	if !strings.Contains(out, `data-video-id="dQw4w9WgXcQ"`) || !strings.Contains(out, `Charger la vidéo YouTube`) {
+		t.Errorf("youtube video with ID missing consent button")
+	}
+	if !strings.Contains(out, `Vidéo à sélectionner avec un enseignant`) {
+		t.Errorf("youtube video without ID missing educational pending notice")
+	}
+}
