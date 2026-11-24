@@ -79,7 +79,7 @@ With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isola
 
 ### Pending
 
-Permission and role tables, default grants and permission checks wait for the role-model decision in [DECISIONS.md](DECISIONS.md#open-decisions). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
+Permission and role tables, default grants and permission checks are not implemented yet; the role model is confirmed in [DECISIONS.md](DECISIONS.md#role-model). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
 
 ## Local renderer experiment
 

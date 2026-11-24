@@ -27,9 +27,9 @@ This is the entry point for every contributor and AI agent: what Learnoo is, who
 
 ## 2. Users and access levels
 
-### 2.1 Proposed model: three account types plus a reviewer permission
+### 2.1 Model: three account types plus a reviewer permission
 
-> **Proposed: awaiting maintainer confirmation.** Recorded as an open decision in [DECISIONS.md](DECISIONS.md#open-decisions). Until it is confirmed, the existing author / reviewer / publisher / administrator permissions in [IMPLEMENTATION_PLAN.md §3](IMPLEMENTATION_PLAN.md#3-updated-internal-studio-access) remain the reference.
+> **Confirmed by the maintainer on 2026-11-24.** Recorded in [DECISIONS.md](DECISIONS.md#role-model).
 
 The product presents three account types. A fourth capability, **Reviewer**, is a permission that an administrator grants to a trusted teacher for specific subjects. It is not a separate account. This keeps the user-facing model simple while preserving the non-negotiable rule that **nobody approves their own lesson**.
 
@@ -106,7 +106,7 @@ Legend: ✅ done · 🟡 in progress / partially done · ⬜ not started · ⛔ 
 | [LRN-003](https://github.com/hadden-me/learnoo/issues/3) | TipTap editor prototype producing restricted JSON | M0 | ⬜ | Must emit the schema in [fixtures/README.md](fixtures/README.md) or a validated adapter |
 | [LRN-004](https://github.com/hadden-me/learnoo/issues/4) | Go + KaTeX renderer validation | M0 | 🟡 | Go renderer selected on evidence; remaining: physical phone + throttled network, real video check |
 | LRN-012 | CI on pull requests | M0 | ⬜ | Proposed; see [ROADMAP](ROADMAP.md#proposed-backlog) |
-| [LRN-005](https://github.com/hadden-me/learnoo/issues/5) | Go/PostgreSQL foundation, sessions, roles | M1 | ⬜ | **Ready:** server skeleton, migrations tooling, users, password hashing, sessions, CSRF, login rate limiting. **Blocked:** permission/role tables until §2 is confirmed |
+| [LRN-005](https://github.com/hadden-me/learnoo/issues/5) | Go/PostgreSQL foundation, sessions, roles | M1 | ⬜ | **Ready:** server skeleton, migrations tooling, users, password hashing, sessions, CSRF, login rate limiting. **Unblocked 2026-11-24:** permission/role tables (role model confirmed) |
 | LRN-013 | Role administration CLI and first admin bootstrap | M1 | ⬜ | Proposed |
 | LRN-014 | Curriculum catalogue seed (Math section) | M1 | ⬜ | Proposed; chapter list needs teacher input |
 | [LRN-006](https://github.com/hadden-me/learnoo/issues/6) | Lessons, revisions, embedded exercises, media | M1 | ⬜ | Needs LRN-004, LRN-005 |
@@ -124,7 +124,6 @@ Legend: ✅ done · 🟡 in progress / partially done · ⬜ not started · ⛔ 
 | --- | --- | --- |
 | **Contributor terms and licence** ([LICENSING.md](LICENSING.md)) | Merging any external code or content | External PRs cannot be accepted until this is resolved. Resolve this first if outside developers or their AI agents are expected to contribute. |
 | First chapter, named teacher author, **separate** qualified reviewer | LRN-001, real pilot content, LRN-011 | Software can be tested with simulated users, but publication needs two real people. |
-| Confirmation of the role model in §2 | Permission tables in LRN-005; LRN-013 | Role names and grants are fixed in migrations. The rest of LRN-005 can proceed. |
 | Privacy policy, account deletion and retention; email-verification policy; email provider | Public registration (M3) | Some students are minors. |
 | Server capacity measurement, backup target | LRN-010, any deployment | Shared server already runs other workloads. |
 

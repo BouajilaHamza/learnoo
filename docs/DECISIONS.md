@@ -11,6 +11,7 @@ Baseline: PROJECT_PLAN.md and IMPLEMENTATION_PLAN.md. Updated 2026-11-23. This f
 - Immutable submitted lesson snapshots including exercises, immutable media, transactional publication, audited withdrawal/restoration.
 - Pilot: Tunisian BAC Mathematics section, mathematics subject; invited internal users first.
 - GitHub for developers; Studio for teachers.
+- Role model (confirmed 2026-11-24): Student / Teacher / Admin account types over independently granted `author`, subject-scoped `reviewer`, `publisher` and `administrator` permissions. See [Role model](#role-model).
 
 ## Open decisions
 
@@ -26,7 +27,6 @@ Baseline: PROJECT_PLAN.md and IMPLEMENTATION_PLAN.md. Updated 2026-11-23. This f
 | Brand, domain, visual design | Maintainer + designer | Public pilot |
 | Resource limits, backup retention and recovery targets | Infrastructure maintainer | Shared-server deployment |
 | Privacy, deletion and retention policy | Maintainer + suitable reviewer | Public registration |
-| User-facing role model: Student / Teacher / Admin account types presenting the independently granted backend permissions author, subject-scoped reviewer, publisher and administrator (proposed 2026-11-24 in [CAHIER_DES_CHARGES.md](CAHIER_DES_CHARGES.md#2-users-and-access-levels); reviewing never implies publishing) | Maintainer | LRN-005 permission migrations |
 
 ## Assumptions to validate
 
@@ -110,3 +110,15 @@ Implementer choices for the foundation slice on 2026-11-24 (role model still ope
 - CSRF: Go's `http.CrossOriginProtection` on every unsafe request (including login), plus a per-session token in `X-CSRF-Token` for authenticated mutations. Login accepts only `application/json`.
 - Throttling in PostgreSQL (no Redis): attempts are recorded before the password check under per-key advisory locks; more than 5 per email or 30 per client address in a sliding 15-minute window returns 429. Keys are stored as SHA-256 hashes, not raw emails or addresses. Accepted risk: an attacker can temporarily lock a known email out; revisit with LRN-022 public-launch hardening.
 - `create-user` reads the password from stdin and creates an account without roles; it is an operator tool, not registration. Role grants remain LRN-013.
+
+## Role model
+
+Confirmed by the maintainer on 2026-11-24, as proposed in [CAHIER_DES_CHARGES.md §2](CAHIER_DES_CHARGES.md#2-users-and-access-levels). Users see three account types; the server stores and checks four independent permissions.
+
+| Account type | Default permissions | Optional grants |
+| --- | --- | --- |
+| Student | none (authenticated learner) | — |
+| Teacher | `author` | `reviewer` per subject; `publisher` |
+| Administrator | `administrator`, `publisher`, `author` | `reviewer` per subject |
+
+Each permission is granted and checked separately on the server. Reviewing never implies publishing. Nobody approves their own revision. Administrators review educational content only in subjects they are assigned to. This unblocks the permission tables and default grants in LRN-005 and the role administration CLI (LRN-013).

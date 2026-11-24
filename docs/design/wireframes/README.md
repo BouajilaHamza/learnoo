@@ -66,11 +66,11 @@ The issue's "review/changes-requested" flow is split across Flow 3 (reviewer sid
 
 Status is always written text. Colour is supplementary and never implies pedagogical approval.
 
-## Permission states and the proposed role model
+## Permission states and the role model
 
-The account labels **Student / Teacher / Teacher + Reviewer / Administrator** come from [CAHIER_DES_CHARGES §2](../../CAHIER_DES_CHARGES.md#2-users-and-access-levels). That model is **proposed and awaiting maintainer confirmation**. Every place that uses those labels is marked with a dashed "proposed" chip.
+The account labels **Student / Teacher / Teacher + Reviewer / Administrator** come from [CAHIER_DES_CHARGES §2](../../CAHIER_DES_CHARGES.md#2-users-and-access-levels). The maintainer confirmed that model on 2026-11-24 ([DECISIONS.md](../../DECISIONS.md#role-model)).
 
-The screens depend only on the existing independent permissions (`author`, `reviewer` per subject, `publisher`, `administrator`), which remain the reference. The wireframes do not grant any new permission. The detailed tables are in [review.html § Permission states](review.html#matrix), [editor.html § Who can open the editor](editor.html#who) and [dashboard.html § Role-based entry points](dashboard.html#roles).
+The screens depend only on the existing independent permissions (`author`, `reviewer` per subject, `publisher`, `administrator`), which the server checks. The wireframes do not grant any new permission. The detailed tables are in [review.html § Permission states](review.html#matrix), [editor.html § Who can open the editor](editor.html#who) and [dashboard.html § Role-based entry points](dashboard.html#roles).
 
 Invariants shown:
 
@@ -84,7 +84,7 @@ Invariants shown:
 
 | Item | Status | Owner / where it is decided |
 | --- | --- | --- |
-| Role model labels (Teacher, Teacher + Reviewer, Admin) | Proposed | Maintainer; DECISIONS.md open decision |
+| Role model labels (Teacher, Teacher + Reviewer, Admin) | Confirmed 2026-11-24 | [DECISIONS.md](../../DECISIONS.md#role-model) |
 | Whether an author holding `publisher` may publish their own lesson after someone else approved it | Not specified | Maintainer; needs a recorded decision before LRN-007 |
 | What an administrator without a subject assignment sees on a submitted revision | Assumed: status and metadata only | LRN-007 |
 | Whether the reviewer checklist is stored with the decision | Open | LRN-007 schema |
