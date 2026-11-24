@@ -21,6 +21,16 @@ var (
 	// indicates storage corruption and needs operator attention.
 	ErrKeyConflict  = errors.New("media: existing file does not match its key")
 	ErrHashMismatch = errors.New("media: asset data does not match its SHA-256")
+	// ErrNotProcessed means the Asset was not produced by Process or its
+	// bytes do not match its content type.
+	ErrNotProcessed = errors.New("media: asset was not produced by Process")
+)
+
+// Test hooks; nil in production.
+var (
+	testHookAfterWrite func() error
+	testHookBeforeLink func(rel string) error
+	testHookLostRace   func()
 )
 
 const (
@@ -90,16 +100,31 @@ func (s *Store) Close() error {
 	return s.root.Close()
 }
 
-// Put stores a processed asset and returns its key. Writing is atomic and
-// never overwrites: data goes to a temporary file in the shard directory, is
-// fsynced and made read-only, then hard-linked to its final name. If the key
-// already exists with the same content (an identical or concurrent upload) Put
-// succeeds without writing; if it exists with different content Put returns
-// ErrKeyConflict and leaves the file untouched.
+// Put stores an asset returned by Process and returns its key. Any other
+// Asset value is rejected, as is one whose bytes no longer match its hash or
+// content type.
+//
+// Writing is atomic and never overwrites: data goes to a temporary file in the
+// shard directory, is fsynced and made read-only, then hard-linked to its final
+// name, and the shard directories are fsynced before Put returns. The media
+// volume must therefore support hard links. If the key already exists with the
+// same content (an identical or concurrent upload) Put succeeds without
+// writing; if it exists with different content Put returns ErrKeyConflict and
+// leaves the file untouched.
+//
+// A crash can leave ".tmp-*" files in shard directories. They are harmless:
+// they never match a key, so Open cannot serve them, and they may be deleted.
 func (s *Store) Put(a *Asset) (string, error) {
-	sum := sha256.Sum256(a.Data)
-	if hex.EncodeToString(sum[:]) != a.SHA256 {
+	if a == nil || !a.processed {
+		return "", ErrNotProcessed
+	}
+	sum := sha256.Sum256(a.data)
+	if hex.EncodeToString(sum[:]) != a.sha256 {
 		return "", ErrHashMismatch
+	}
+	if f, ok := sniff(a.data); !ok || f.contentType != a.contentType ||
+		(a.contentType != ContentTypePNG && a.contentType != ContentTypeJPEG) {
+		return "", ErrNotProcessed
 	}
 	key := a.Key()
 	if !ValidKey(key) {
@@ -111,39 +136,45 @@ func (s *Store) Put(a *Asset) (string, error) {
 		return "", fmt.Errorf("media: create shard directory: %w", err)
 	}
 
-	if ok, err := s.matches(rel, a.Data); err == nil {
+	if ok, err := s.matches(rel, a.data); err == nil {
 		if !ok {
 			return "", ErrKeyConflict
 		}
-		return key, nil
+		// The file may have just been linked by a writer that has not yet
+		// synced; make it durable before reporting success.
+		return key, s.syncDirs(dir)
 	} else if !errors.Is(err, fs.ErrNotExist) {
 		return "", err
 	}
 
-	tmp, err := s.writeTemp(dir, a.Data)
+	tmp, err := s.writeTemp(dir, a.data)
 	if err != nil {
 		return "", err
 	}
 	defer s.root.Remove(tmp)
 
+	if testHookBeforeLink != nil {
+		if err := testHookBeforeLink(rel); err != nil {
+			return "", err
+		}
+	}
 	if err := s.root.Link(tmp, rel); err != nil {
 		if !errors.Is(err, fs.ErrExist) {
 			return "", fmt.Errorf("media: publish file: %w", err)
 		}
 		// Lost a race with another writer: accept only identical content.
-		ok, err := s.matches(rel, a.Data)
+		if testHookLostRace != nil {
+			testHookLostRace()
+		}
+		ok, err := s.matches(rel, a.data)
 		if err != nil {
 			return "", err
 		}
 		if !ok {
 			return "", ErrKeyConflict
 		}
-		return key, nil
 	}
-	if err := s.syncDir(dir); err != nil {
-		return "", err
-	}
-	return key, nil
+	return key, s.syncDirs(dir)
 }
 
 func (s *Store) writeTemp(dir string, data []byte) (string, error) {
@@ -157,6 +188,9 @@ func (s *Store) writeTemp(dir string, data []byte) (string, error) {
 		return "", fmt.Errorf("media: create temporary file: %w", err)
 	}
 	_, werr := f.Write(data)
+	if werr == nil && testHookAfterWrite != nil {
+		werr = testHookAfterWrite()
+	}
 	if werr == nil {
 		werr = f.Chmod(filePerm) // independent of umask
 	}
@@ -172,6 +206,20 @@ func (s *Store) writeTemp(dir string, data []byte) (string, error) {
 		return "", fmt.Errorf("media: write temporary file: %w", werr)
 	}
 	return name, nil
+}
+
+// syncDirs fsyncs the shard directory and its parents up to the root, so newly
+// created directories and the new link survive a crash.
+func (s *Store) syncDirs(dir string) error {
+	for {
+		if err := s.syncDir(dir); err != nil {
+			return err
+		}
+		if dir == "." {
+			return nil
+		}
+		dir = path.Dir(dir)
+	}
 }
 
 func (s *Store) syncDir(dir string) error {
