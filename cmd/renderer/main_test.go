@@ -29,6 +29,22 @@ func TestPreviewMatchesReader(t *testing.T) {
 		t.Fatal("missing prototype security headers")
 	}
 }
+
+func TestLoopbackHostAllowed(t *testing.T) {
+	h := handler()
+	for _, host := range []string{"127.0.0.1:8080", "localhost:8080", "127.0.0.1", "localhost", "[::1]:8080", "[::1]"} {
+		t.Run(host, func(t *testing.T) {
+			r := request("GET", "/lesson", nil)
+			r.Host = host
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code != http.StatusOK {
+				t.Fatalf("host %q got %d, want 200", host, w.Code)
+			}
+		})
+	}
+}
+
 func TestRejectedRequests(t *testing.T) {
 	for _, tc := range []struct {
 		name, method, path, host, site, content string
@@ -36,6 +52,7 @@ func TestRejectedRequests(t *testing.T) {
 		want                                    int
 	}{
 		{name: "rebind", method: "GET", path: "/lesson", host: "evil.example:8080", want: 403},
+		{name: "rebind portless", method: "GET", path: "/lesson", host: "evil.example", want: 403},
 		{name: "cross origin", method: "POST", path: "/preview", site: "cross-site", content: "application/json", body: []byte(`{}`), want: 403},
 		{name: "wrong media", method: "POST", path: "/preview", content: "text/plain", want: 415},
 		{name: "invalid json", method: "POST", path: "/preview", content: "application/json", body: []byte(`{}`), want: 400},

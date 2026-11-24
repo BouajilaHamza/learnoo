@@ -76,8 +76,11 @@ func handler() http.Handler {
 	})
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// Prevent DNS-rebinding access to this intentionally unauthenticated local experiment.
-		host, _, hostErr := net.SplitHostPort(r.Host)
-		if hostErr != nil || (host != "127.0.0.1" && host != "localhost") {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(r.Host); err == nil {
+			host = h
+		}
+		if host != "127.0.0.1" && host != "localhost" && host != "::1" && host != "[::1]" {
 			http.Error(w, "Loopback host required", 403)
 			return
 		}
