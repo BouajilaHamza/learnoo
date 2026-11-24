@@ -2,6 +2,8 @@ package media
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"io"
 	"io/fs"
@@ -9,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 )
 
@@ -25,7 +28,7 @@ func newStore(t *testing.T) (*Store, string) {
 
 func processed(t *testing.T, data []byte) *Asset {
 	t.Helper()
-	a, err := Process(bytes.NewReader(data), "")
+	a, err := process(data, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -59,8 +62,8 @@ func TestStorePutAndOpen(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if key != a.Key() || !strings.HasPrefix(key, a.SHA256) {
-			t.Fatalf("key %q for sha %s", key, a.SHA256)
+		if key != a.Key() || !strings.HasPrefix(key, a.SHA256()) {
+			t.Fatalf("key %q for sha %s", key, a.SHA256())
 		}
 		want := filepath.Join(dir, key[0:2], key[2:4], key)
 		fi, err := os.Stat(want)
@@ -75,7 +78,7 @@ func TestStorePutAndOpen(t *testing.T) {
 		if err != nil || di.Mode().Perm()&^0o750 != 0 {
 			t.Errorf("shard dir mode %v err %v, want at most 0750", di.Mode().Perm(), err)
 		}
-		if ct, err := ContentTypeForKey(key); err != nil || ct != a.ContentType {
+		if ct, err := ContentTypeForKey(key); err != nil || ct != a.ContentType() {
 			t.Errorf("ContentTypeForKey = %q, %v", ct, err)
 		}
 		f, err := s.Open(key)
@@ -84,7 +87,7 @@ func TestStorePutAndOpen(t *testing.T) {
 		}
 		got, _ := io.ReadAll(f)
 		f.Close()
-		if !bytes.Equal(got, a.Data) {
+		if !bytes.Equal(got, a.Data()) {
 			t.Fatal("stored bytes differ")
 		}
 	}
@@ -98,7 +101,7 @@ func TestStoreIdempotent(t *testing.T) {
 	// Different uploads with identical pixels canonicalise to the same asset.
 	in := pngBytes(t, 4, 4)
 	a := processed(t, in)
-	b := processed(t, append(append([]byte{}, in...), "trailer"...))
+	b := processed(t, insertBeforeIEND(in, pngChunk("tEXt", []byte("Comment\x00other"))))
 	k1, err := s.Put(a)
 	if err != nil {
 		t.Fatal(err)
@@ -159,22 +162,124 @@ func TestStoreNeverReplaces(t *testing.T) {
 	}
 }
 
-func TestStoreRejectsHashMismatch(t *testing.T) {
+func TestStoreRejectsUnprocessedAssets(t *testing.T) {
 	s, dir := newStore(t)
 	a := processed(t, pngBytes(t, 2, 2))
-	forged := *a
-	forged.Data = append([]byte{}, a.Data...)
-	forged.Data[len(forged.Data)-1] ^= 1
-	if _, err := s.Put(&forged); !errors.Is(err, ErrHashMismatch) {
-		t.Fatalf("got %v", err)
+	flipped := a.Data()
+	flipped[len(flipped)-1] ^= 1
+	svg := []byte(`<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>`)
+	svgSum := sha256.Sum256(svg)
+
+	tests := []struct {
+		name  string
+		asset *Asset
+		want  error
+	}{
+		{"nil", nil, ErrNotProcessed},
+		{"zero value", &Asset{}, ErrNotProcessed},
+		{"hand-built copy of a real asset", &Asset{data: a.data, sha256: a.sha256, contentType: a.contentType, width: 2, height: 2}, ErrNotProcessed},
+		{"hand-built svg", &Asset{data: svg, sha256: hex.EncodeToString(svgSum[:]), contentType: ContentTypePNG}, ErrNotProcessed},
+		{"processed, bytes changed", &Asset{processed: true, data: flipped, sha256: a.sha256, contentType: a.contentType}, ErrHashMismatch},
+		{"processed, traversal hash", &Asset{processed: true, data: a.data, sha256: "../../../etc/passwd", contentType: a.contentType}, ErrHashMismatch},
+		{"processed, png bytes as jpeg", &Asset{processed: true, data: a.data, sha256: a.sha256, contentType: ContentTypeJPEG}, ErrNotProcessed},
+		{"processed, png bytes as webp", &Asset{processed: true, data: a.data, sha256: a.sha256, contentType: ContentTypeWebP}, ErrNotProcessed},
 	}
-	forged = *a
-	forged.SHA256 = "../../../etc/passwd"
-	if _, err := s.Put(&forged); !errors.Is(err, ErrHashMismatch) {
-		t.Fatalf("got %v", err)
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := s.Put(tc.asset); !errors.Is(err, tc.want) {
+				t.Fatalf("got %v, want %v", err, tc.want)
+			}
+		})
 	}
 	if n := len(files(t, dir)); n != 0 {
 		t.Fatalf("%d files written", n)
+	}
+}
+
+// Data returns a copy, so callers cannot change an asset after Process.
+func TestAssetDataIsACopy(t *testing.T) {
+	a := processed(t, pngBytes(t, 2, 2))
+	d := a.Data()
+	d[0] ^= 0xFF
+	s, _ := newStore(t)
+	if _, err := s.Put(a); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestStoreConcurrentLostRace(t *testing.T) {
+	s, dir := newStore(t)
+	a := processed(t, pngBytes(t, 8, 8))
+	const n = 8
+	// Hold every writer before Link until all have written their temporary
+	// file, so all but one must take the lost-race (EEXIST) branch.
+	var arrived sync.WaitGroup
+	arrived.Add(n)
+	release := make(chan struct{})
+	go func() { arrived.Wait(); close(release) }()
+	var lost atomic.Int64
+	testHookBeforeLink = func(string) error { arrived.Done(); <-release; return nil }
+	testHookLostRace = func() { lost.Add(1) }
+	defer func() { testHookBeforeLink, testHookLostRace = nil, nil }()
+
+	var wg sync.WaitGroup
+	errs := make([]error, n)
+	for i := range n {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_, errs[i] = s.Put(a)
+		}()
+	}
+	wg.Wait()
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("writer %d: %v", i, err)
+		}
+	}
+	if got := lost.Load(); got != n-1 {
+		t.Fatalf("lost-race branch taken %d times, want %d", got, n-1)
+	}
+	if got := files(t, dir); len(got) != 1 {
+		t.Fatalf("files %v, want exactly one", got)
+	}
+}
+
+func TestStoreLostRaceToDifferentContent(t *testing.T) {
+	s, dir := newStore(t)
+	a := processed(t, pngBytes(t, 2, 2))
+	p := filepath.Join(dir, filepath.FromSlash(relPath(a.Key())))
+	// Another file appears under the key between the existence check and Link.
+	testHookBeforeLink = func(string) error { return os.WriteFile(p, []byte("other content"), 0o444) }
+	defer func() { testHookBeforeLink = nil }()
+	if _, err := s.Put(a); !errors.Is(err, ErrKeyConflict) {
+		t.Fatalf("got %v, want ErrKeyConflict", err)
+	}
+	if got, _ := os.ReadFile(p); string(got) != "other content" {
+		t.Fatal("existing file was replaced")
+	}
+	if got := files(t, dir); len(got) != 1 {
+		t.Fatalf("files %v: temporary file left behind", got)
+	}
+}
+
+func TestStoreRemovesTempOnFailure(t *testing.T) {
+	injected := errors.New("injected failure")
+	for name, set := range map[string]func(){
+		"write": func() { testHookAfterWrite = func() error { return injected } },
+		"link":  func() { testHookBeforeLink = func(string) error { return injected } },
+	} {
+		t.Run(name, func(t *testing.T) {
+			s, dir := newStore(t)
+			set()
+			defer func() { testHookAfterWrite, testHookBeforeLink = nil, nil }()
+			if _, err := s.Put(processed(t, pngBytes(t, 2, 2))); !errors.Is(err, injected) {
+				t.Fatalf("got %v", err)
+			}
+			if got := files(t, dir); len(got) != 0 {
+				t.Fatalf("files left behind: %v", got)
+			}
+		})
 	}
 }
 
