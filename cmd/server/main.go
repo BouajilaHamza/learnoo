@@ -262,6 +262,9 @@ func bootstrapAdmin(ctx context.Context, args []string, stdin io.Reader, stdout 
 	if errors.Is(err, permissions.ErrAdministratorExists) {
 		return fmt.Errorf("%w; bootstrap-admin only sets up the first one (use grant)", err)
 	}
+	if errors.Is(err, users.ErrEmailTaken) {
+		return fmt.Errorf("%w; for an existing account use grant -permission administrator (and publisher, author)", err)
+	}
 	if err != nil {
 		return err
 	}
@@ -286,11 +289,13 @@ func changePermission(ctx context.Context, action string, args []string, stdout 
 	if err != nil {
 		return err
 	}
-	switch {
-	case p == permissions.Reviewer && *subject == "":
-		return errors.New("reviewer is granted per subject: give -subject CODE")
-	case p.Global() && *subject != "":
+	if p.Global() && *subject != "" {
 		return fmt.Errorf("%s is a global permission: -subject is not allowed", p)
+	}
+	// Subject codes are stored lower-case; accept the same leniency as emails.
+	*subject = strings.ToLower(strings.TrimSpace(*subject))
+	if p == permissions.Reviewer && *subject == "" {
+		return errors.New("reviewer is granted per subject: give -subject CODE")
 	}
 	pool, err := openMigrated(ctx)
 	if err != nil {

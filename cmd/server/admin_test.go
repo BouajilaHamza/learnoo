@@ -253,3 +253,73 @@ func TestInvalidOperatorCommandsChangeNothing(t *testing.T) {
 		}
 	}
 }
+
+func TestBootstrapAdminRefusesExistingEmail(t *testing.T) {
+	c := newCLI(t)
+	c.ok(cliPassword, "create-user", "-email", "existing@example.test", "-name", "Simulated Existing")
+	before := c.snapshot()
+	_, err := c.run(cliPassword, "bootstrap-admin", "-email", " Existing@Example.test", "-name", "Simulated Admin")
+	if err == nil || !strings.Contains(err.Error(), "already registered") || !strings.Contains(err.Error(), "grant -permission administrator") {
+		t.Fatalf("bootstrap with existing email: %v", err)
+	}
+	if got := c.snapshot(); got != before {
+		t.Fatalf("refused bootstrap changed the database: %s -> %s", before, got)
+	}
+	// The documented alternative works with no administrator yet.
+	for _, p := range []string{"administrator", "publisher", "author"} {
+		c.ok("", "grant", "-email", "existing@example.test", "-permission", p)
+	}
+	wantOut(t, c.ok("", "show-user", "-email", "existing@example.test"), "global permissions: author, publisher, administrator")
+}
+
+func TestSubjectCodeIsNormalised(t *testing.T) {
+	c := newCLI(t)
+	c.ok(cliPassword, "create-user", "-email", "teacher@example.test", "-name", "Simulated Teacher")
+	c.subject("simulated-math")
+	wantOut(t, c.ok("", "grant", "-email", "teacher@example.test", "-permission", "reviewer", "-subject", "  Simulated-MATH "), "granted reviewer for subject simulated-math")
+	wantOut(t, c.ok("", "grant", "-email", "teacher@example.test", "-permission", "reviewer", "-subject", "simulated-math"), "no change")
+	wantOut(t, c.ok("", "revoke", "-email", "teacher@example.test", "-permission", "reviewer", "-subject", "SIMULATED-MATH"), "revoked reviewer for subject simulated-math")
+	before := c.snapshot()
+	for _, args := range [][]string{
+		{"grant", "-email", "teacher@example.test", "-permission", "reviewer", "-subject", "   "},
+		{"grant", "-email", "teacher@example.test", "-permission", "author", "-subject", "   "},
+	} {
+		if _, err := c.run("", args...); err == nil {
+			t.Errorf("%v accepted", args)
+		}
+	}
+	if c.snapshot() != before {
+		t.Fatal("rejected subject changed the database")
+	}
+}
+
+func TestOperatorCommandsRefusePendingMigrations(t *testing.T) {
+	pool := dbtest.EmptySchema(t)
+	var schema string
+	if err := pool.QueryRow(context.Background(), `SELECT current_schema()`).Scan(&schema); err != nil {
+		t.Fatal(err)
+	}
+	url := dbtest.URL(t)
+	sep := "?"
+	if strings.Contains(url, "?") {
+		sep = "&"
+	}
+	t.Setenv("LEARNOO_DATABASE_URL", url+sep+"search_path="+schema)
+	c := &cli{t: t, pool: pool, log: slog.New(slog.NewTextHandler(io.Discard, nil))}
+	for _, tc := range []struct {
+		stdin string
+		args  []string
+	}{
+		{"", []string{"grant", "-email", "a@example.test", "-permission", "author"}},
+		{"", []string{"revoke", "-email", "a@example.test", "-permission", "author"}},
+		{"", []string{"show-user", "-email", "a@example.test"}},
+		{cliPassword, []string{"bootstrap-admin", "-email", "a@example.test", "-name", "A"}},
+	} {
+		if _, err := c.run(tc.stdin, tc.args...); err == nil || !strings.Contains(err.Error(), "pending migrations") {
+			t.Errorf("%v: %v", tc.args, err)
+		}
+	}
+	if n := c.count(`SELECT count(*) FROM information_schema.tables WHERE table_schema = current_schema() AND table_name <> 'schema_migrations'`); n != 0 {
+		t.Fatalf("%d tables created", n)
+	}
+}

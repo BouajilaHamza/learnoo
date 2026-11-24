@@ -64,7 +64,9 @@ Bootstrap the first administrator on a new database (account plus `administrator
 read -rs PW && printf '%s\n' "$PW" | go run ./cmd/server bootstrap-admin -email admin@example.test -name 'Admin Name'; unset PW
 ```
 
-Grant or revoke a global permission (`author`, `publisher`, `administrator`) by email, or `reviewer` for one subject by its `subjects.code` (subjects are created by LRN-014; none are seeded yet):
+`bootstrap-admin` always creates a new account; if the email is already registered it is refused and nothing changes. To make an existing account the first administrator, grant `administrator`, `publisher` and `author` to it with `grant` (below).
+
+Grant or revoke a global permission (`author`, `publisher`, `administrator`) by email, or `reviewer` for one subject by its `subjects.code` (trimmed and lower-cased, like emails; subjects are created by LRN-014, none are seeded yet):
 
 ```sh
 go run ./cmd/server grant  -email teacher@example.test -permission author
@@ -102,7 +104,7 @@ go test ./...
 go vet ./...
 ```
 
-With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection, the operator commands (bootstrap, grant, revoke, show-user, invalid input leaving the database unchanged), concurrent bootstrap and concurrent revocation of the last two administrators, and a source check that only `cmd/server` calls the permission-changing methods. They use simulated users only. Run the concurrency tests under the race detector with `go test -race ./internal/... ./cmd/server`.
+With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection, the operator commands (bootstrap, grant, revoke, show-user, invalid input leaving the database unchanged), concurrent bootstrap, concurrent revocation of the last two administrators (by the operator, and by the two administrators revoking each other), and a type-checked source scan. The scan allows `permissions.Store` change methods only in `cmd/server/main.go` and `internal/permissions/permissions.go`, and `permissions.Operator` only there too; flags either inside any function taking an `http.ResponseWriter`; and flags SQL literals that write `user_permissions`, `reviewer_assignments` or `permission_audit` outside `internal/permissions`, or set `users.disabled_at` anywhere. It is a guard against accidental paths, not a proof (it cannot see dynamically built SQL). A route test only checks that a few plausible admin paths return 404. They use simulated users only. Run the concurrency tests under the race detector with `go test -race ./internal/... ./cmd/server`.
 
 ### Pending
 

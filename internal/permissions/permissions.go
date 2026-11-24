@@ -94,7 +94,11 @@ func LockAdministrators(ctx context.Context, tx pgx.Tx) error {
 
 // GuardAdministratorRemoval returns ErrLastAdministrator if userID is an
 // active administrator and no other active administrator exists. It takes
-// the administrators lock first (re-taking it in the same tx is harmless).
+// the administrators lock (re-taking it in the same tx is harmless), but
+// callers must already hold it before any row lock: call LockAdministrators
+// first, then Authorize, then this. Taking the lock only here, after
+// Authorize's FOR SHARE, lets two administrators acting on each other
+// deadlock (SQLSTATE 40P01).
 func GuardAdministratorRemoval(ctx context.Context, tx pgx.Tx, userID int64) error {
 	if err := LockAdministrators(ctx, tx); err != nil {
 		return err

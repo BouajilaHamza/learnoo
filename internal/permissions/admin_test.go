@@ -309,3 +309,48 @@ func TestOperatorLookups(t *testing.T) {
 		}
 	}
 }
+
+// Two administrators revoking each other at once. Each transaction locks its
+// own actor's grant (authorize) and deletes the other's, so without the
+// administrators lock taken first they deadlock. With it they serialize: one
+// revocation succeeds and the other actor, no longer an administrator, is
+// denied.
+func TestCrossActorRevokesDoNotDeadlock(t *testing.T) {
+	e := newEnv(t)
+	a := e.userOfType("admin-a", permissions.Admin)
+	b := e.userOfType("admin-b", permissions.Admin)
+	e.warm(2)
+	for i := range raceIterations {
+		start := make(chan struct{})
+		errs := make([]error, 2)
+		var wg sync.WaitGroup
+		for g, pair := range [][2]int64{{a, b}, {b, a}} {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				<-start
+				_, errs[g] = e.store.Revoke(context.Background(), permissions.UserActor(pair[0]), pair[1], permissions.Administrator)
+			}()
+		}
+		close(start)
+		wg.Wait()
+		ok := 0
+		for _, err := range errs {
+			switch {
+			case err == nil:
+				ok++
+			case errors.Is(err, permissions.ErrDenied), errors.Is(err, permissions.ErrLastAdministrator):
+			default:
+				t.Fatalf("iteration %d: unexpected error %v", i, err)
+			}
+		}
+		if ok != 1 || e.activeAdmins() != 1 {
+			t.Fatalf("iteration %d: %d succeeded, %d active administrators (%v)", i, ok, e.activeAdmins(), errs)
+		}
+		for _, id := range []int64{a, b} {
+			if _, err := e.store.Grant(e.ctx, permissions.Operator, id, permissions.Administrator); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
