@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -521,5 +522,80 @@ func TestProcessConcurrencyCap(t *testing.T) {
 	}
 	if n := len(decodeSlots); n != 0 {
 		t.Fatalf("%d slots leaked", n)
+	}
+}
+
+func exifOrientationSegment(orient uint16) []byte {
+	return []byte{
+		'E', 'x', 'i', 'f', 0, 0,
+		'M', 'M', 0, 42, 0, 0, 0, 8, // TIFF Big Endian
+		0, 1, // 1 tag
+		0x01, 0x12, // Tag 0x0112 = Orientation
+		0, 3, // SHORT
+		0, 0, 0, 1, // Count 1
+		byte(orient >> 8), byte(orient), 0, 0, // Value
+		0, 0, 0, 0, // End of IFD
+	}
+}
+
+func TestProcessExifOrientation(t *testing.T) {
+	// 16x32 asymmetric image
+	jpg := jpegBytes(t, 16, 32)
+	for _, tc := range []struct {
+		orientation uint16
+		wantW       int
+		wantH       int
+	}{
+		{orientation: 1, wantW: 16, wantH: 32},
+		{orientation: 3, wantW: 16, wantH: 32}, // 180 deg
+		{orientation: 6, wantW: 32, wantH: 16}, // 90 CW (rotated portrait to landscape)
+		{orientation: 8, wantW: 32, wantH: 16}, // 270 CW
+	} {
+		t.Run(fmt.Sprintf("orientation_%d", tc.orientation), func(t *testing.T) {
+			input := insertJPEGSegment(jpg, 0xE1, exifOrientationSegment(tc.orientation))
+			a, err := process(input, "image/jpeg")
+			if err != nil {
+				t.Fatalf("Process orientation %d failed: %v", tc.orientation, err)
+			}
+			if a.Width() != tc.wantW || a.Height() != tc.wantH {
+				t.Fatalf("orientation %d: got %dx%d, want %dx%d", tc.orientation, a.Width(), a.Height(), tc.wantW, tc.wantH)
+			}
+		})
+	}
+}
+
+func TestProcessPhonePhotoUploads(t *testing.T) {
+	jpg := jpegBytes(t, 16, 16)
+	mpfSecondary := []byte("\xFF\xD8\xFF\xE0\x00\x10JFIF\x00\x01\x01\x00\x00\x01\x00\x01\x00\x00\xFF\xD9")
+	motionPhotoAtom := []byte("\x00\x00\x00\x18ftypmp42\x00\x00\x00\x00mp42isom")
+	zeroPadding := make([]byte, 128)
+
+	for _, tc := range []struct {
+		name    string
+		trailer []byte
+		wantErr bool
+	}{
+		{name: "mpf_secondary_jpeg", trailer: mpfSecondary, wantErr: false},
+		{name: "motion_photo_mp4", trailer: motionPhotoAtom, wantErr: false},
+		{name: "zero_padding", trailer: zeroPadding, wantErr: false},
+		{name: "script_injection", trailer: []byte(script), wantErr: true},
+		{name: "zip_polyglot", trailer: []byte("PK\x03\x04payload"), wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			input := append(append([]byte{}, jpg...), tc.trailer...)
+			a, err := process(input, "image/jpeg")
+			if tc.wantErr {
+				if !errors.Is(err, ErrTrailingData) {
+					t.Fatalf("got err %v, want ErrTrailingData", err)
+				}
+			} else {
+				if err != nil {
+					t.Fatalf("unexpected error for %s: %v", tc.name, err)
+				}
+				if a == nil {
+					t.Fatal("expected valid asset")
+				}
+			}
+		})
 	}
 }
