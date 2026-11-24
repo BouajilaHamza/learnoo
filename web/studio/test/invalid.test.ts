@@ -1,7 +1,7 @@
 import casesSource from './contract/cases.json?raw';
 import { describe, expect, it } from 'vitest';
 import { lessonToEditorChecked } from '../src/schema/adapter';
-import { LessonError, MAX_DOCUMENT_BYTES, parseLesson } from '../src/schema/lesson';
+import { LessonError, MAX_DOCUMENT_BYTES, findDuplicateKey, parseLesson } from '../src/schema/lesson';
 import { DRAFT_KEY, reopenDraft } from '../src/schema/storage';
 import { createEditor, exportFrom } from './helpers';
 
@@ -24,14 +24,29 @@ describe('validation parity with Go (test/contract/cases.json)', () => {
   });
 });
 
+describe('findDuplicateKey', () => {
+  it.each([
+    ['{"a":1,"b":{"a":2},"c":[{"a":3},{"a":4}]}', null],
+    ['{"a":"\\"a\\":","b":"{\\\\","c":"}"}', null],
+    ['{"k":["a","a"],"v":"a"}', null],
+    ['{"a":1,"a":2}', 'a'],
+    ['{"x":[{"y":{"a":1, "a" :2}}]}', 'a'],
+    ['{"src":1,"\\u0073rc":2}', 'src'],
+    ['{"\\"":1,"\\u0022":2}', '"'],
+  ])('%s', (source, expected) => {
+    JSON.parse(source);
+    expect(findDuplicateKey(source)).toBe(expected);
+  });
+});
+
 describe('adapter refuses what the reader would silently ignore', () => {
-  const editor = createEditor();
   it.each([
     ['lang on a callout', { type: 'callout', lang: 'ar', children: [{ type: 'paragraph', children: [{ type: 'text', text: 'x' }] }] }],
     ['dir on inline math', { type: 'paragraph', children: [{ type: 'math', text: 'x', dir: 'rtl' }] }],
     ['title on a paragraph', { type: 'paragraph', title: 'x', children: [{ type: 'text', text: 'x' }] }],
   ])('%s', (_, block) => {
     const doc = parseLesson(JSON.stringify({ ...base, blocks: [block] }));
+    const editor = createEditor();
     expect(() => lessonToEditorChecked(editor.schema, doc.blocks)).toThrow(LessonError);
   });
 });
