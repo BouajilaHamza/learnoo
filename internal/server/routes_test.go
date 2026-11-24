@@ -38,14 +38,24 @@ var allowedChangeFiles = map[string]bool{
 }
 
 // sqlOwners lists, per protected write, the only package that may contain
-// it in a SQL string literal.
+// it in a SQL string literal. Table names may be schema-qualified and
+// quoted. SQL assembled by concatenation or at run time is out of scope.
 var sqlOwners = []struct {
 	re    *regexp.Regexp
 	owner string
 }{
-	{regexp.MustCompile(`(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+(user_permissions|reviewer_assignments|permission_audit)\b`), "internal/permissions"},
-	{regexp.MustCompile(`(insert\s+into|update|delete\s+from|truncate(\s+table)?)\s+account_status_audit\b`), "internal/accounts"},
-	{regexp.MustCompile(`update\s+users\b[^;]*\bdisabled_at\b`), "internal/accounts"},
+	{sqlWrite(`(user_permissions|reviewer_assignments|permission_audit)`), "internal/permissions"},
+	{sqlWrite(`account_status_audit`), "internal/accounts"},
+	{regexp.MustCompile(`update\s+(only\s+)?` + sqlTable(`users`) + `[^;]*\bdisabled_at\b`), "internal/accounts"},
+}
+
+// sqlTable matches a table name, optionally quoted and schema-qualified.
+func sqlTable(name string) string {
+	return `("?[a-z_][a-z0-9_$]*"?\s*\.\s*)?"?` + name + `"?(\s|\(|$|;)`
+}
+
+func sqlWrite(tables string) *regexp.Regexp {
+	return regexp.MustCompile(`(insert\s+into|update(\s+only)?|delete\s+from(\s+only)?|truncate(\s+table)?(\s+only)?)\s+` + sqlTable(tables))
 }
 
 type goPackage struct {
@@ -165,16 +175,26 @@ func checkFile(t *testing.T, fset *token.FileSet, root, pkgRel string, f *ast.Fi
 	ast.Inspect(f, func(n ast.Node) bool {
 		switch x := n.(type) {
 		case *ast.SelectorExpr:
-			if sel := info.Selections[x]; sel != nil && sel.Kind() == types.MethodVal {
-				recv := sel.Recv()
-				if p, ok := recv.(*types.Pointer); ok {
-					recv = p.Elem()
-				}
-				if named, ok := recv.(*types.Named); ok && named.Obj().Name() == "Store" && named.Obj().Pkg() != nil &&
-					changeMethods[named.Obj().Pkg().Path()][x.Sel.Name] {
-					if !allowedChangeFiles[fileRel] || inHandler(x.Pos()) {
-						t.Errorf("%s: %s.%s changes permissions or account status outside the operator CLI", pos(x.Pos()), named.Obj().Name(), x.Sel.Name)
-					}
+			// Resolve the method object itself, so calls, method values,
+			// method expressions ((*Store).Grant) and methods promoted
+			// through embedding all count. Calls through an interface do
+			// not resolve to the Store method and are out of scope.
+			fn, ok := info.Uses[x.Sel].(*types.Func)
+			if !ok {
+				return true
+			}
+			recv := fn.Type().(*types.Signature).Recv()
+			if recv == nil {
+				return true
+			}
+			rt := recv.Type()
+			if p, ok := rt.(*types.Pointer); ok {
+				rt = p.Elem()
+			}
+			if named, ok := rt.(*types.Named); ok && named.Obj().Name() == "Store" && named.Obj().Pkg() != nil &&
+				changeMethods[named.Obj().Pkg().Path()][fn.Name()] {
+				if !allowedChangeFiles[fileRel] || inHandler(x.Pos()) {
+					t.Errorf("%s: %s.%s changes permissions or account status outside the operator CLI", pos(x.Pos()), named.Obj().Name(), fn.Name())
 				}
 			}
 		case *ast.Ident:
