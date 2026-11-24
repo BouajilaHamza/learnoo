@@ -13,7 +13,7 @@
 <header>
   <nav class="crumbs" aria-label="Wireframes"><a href="index.html">Index des wireframes</a><a href="README.md">Notes (README)</a></nav>
   <h1>Flow 3 — Reviewer decision and publication</h1>
-  <p class="notice"><strong>Wireframe, not production UI.</strong> Labels "Teacher", "Teacher + Reviewer" and "Administrator" follow the <strong>proposed</strong> role model in CAHIER_DES_CHARGES §2 (awaiting confirmation). Underneath, the screens depend only on the independent permissions <code>reviewer</code> (per subject), <code>publisher</code> and <code>administrator</code>, which are the current reference. Nothing here grants a new permission.</p>
+  <p class="notice"><strong>Wireframe, not production UI.</strong> Labels "Teacher", "Teacher + Reviewer" and "Administrator" follow the role model confirmed on 2026-11-24 (DECISIONS.md, Role model). Underneath, the screens depend only on the independent permissions <code>reviewer</code> (per subject), <code>publisher</code> and <code>administrator</code>, which the server checks. Nothing here grants a new permission.</p>
   <p class="lede">Covers: the decision screen, required comment for "request changes", self-approval denial, approval and publication as separate controls, a stale-publication conflict, the reviewer queue with empty state, and the mobile layout.</p>
 </header>
 <main id="doc-main">
@@ -288,12 +288,12 @@
   </thead>
   <tbody>
     <tr><th scope="row">Student</th><td>No (403)</td><td>No</td><td>No</td></tr>
-    <tr><th scope="row">Teacher <span class="proposed">proposed</span> — <code>author</code> only, not the author</th><td>No (403)</td><td>No</td><td>No</td></tr>
+    <tr><th scope="row">Teacher — <code>author</code> only, not the author</th><td>No (403)</td><td>No</td><td>No</td></tr>
     <tr><th scope="row">Teacher — author of this revision</th><td>Own read-only view (Flow 2.3)</td><td>No — 3.3</td><td>Open question (3.4 note)</td></tr>
-    <tr><th scope="row">Teacher + Reviewer <span class="proposed">proposed</span> for Mathématiques, not the author</th><td>Yes</td><td>Yes — 3.1</td><td>Only with <code>publisher</code> — 3.4 A/B</td></tr>
+    <tr><th scope="row">Teacher + Reviewer for Mathématiques, not the author</th><td>Yes</td><td>Yes — 3.1</td><td>Only with <code>publisher</code> — 3.4 A/B</td></tr>
     <tr><th scope="row">Teacher + Reviewer for another subject only</th><td>No (403)</td><td>No</td><td>Only with <code>publisher</code>, and only once approved</td></tr>
     <tr><th scope="row">Teacher + Reviewer, author of this revision</th><td>Yes, read-only</td><td>No — 3.3</td><td>Open question</td></tr>
-    <tr><th scope="row">Administrator without Mathématiques review assignment</th><td>Status and metadata <span class="proposed">assumed</span></td><td>No</td><td>Yes (admin holds <code>publisher</code> by default in the proposal)</td></tr>
+    <tr><th scope="row">Administrator without Mathématiques review assignment</th><td>Status and metadata <span class="proposed">assumed</span></td><td>No</td><td>Yes (admin holds <code>publisher</code> by default)</td></tr>
     <tr><th scope="row">Administrator with Mathématiques review assignment, not the author</th><td>Yes</td><td>Yes</td><td>Yes</td></tr>
   </tbody>
 </table>

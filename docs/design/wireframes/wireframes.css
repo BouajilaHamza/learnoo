@@ -78,7 +78,7 @@ summary:focus-visible,
 
 .lede { color: var(--learnoo-color-muted); max-width: 48rem; }
 
-/* Proposed role-model marker */
+/* Open-decision marker */
 .proposed {
   display: inline-block;
   border: 1px dashed var(--learnoo-color-accent);

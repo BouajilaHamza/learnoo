@@ -2,7 +2,7 @@
 
 Contract home for Studio ↔ server and reader ↔ server endpoints ([CAHIER_DES_CHARGES.md §5.4](CAHIER_DES_CHARGES.md#54-shared-contracts-agree-first-then-build-in-parallel)). Changes used by another open task are agreed on its issue first.
 
-Served by `cmd/server` (not `cmd/renderer`). Status: **LRN-005 foundation, authentication only.** No endpoint checks roles or permissions yet; those wait for the role-model decision. No educational endpoint exists.
+Served by `cmd/server` (not `cmd/renderer`). Status: **LRN-005 foundation, authentication only.** No endpoint checks roles or permissions yet. The role model is confirmed ([DECISIONS.md](DECISIONS.md#role-model)); permission checks arrive with the permission tables. No educational endpoint exists.
 
 ## Conventions
 
