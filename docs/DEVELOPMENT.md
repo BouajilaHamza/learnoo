@@ -24,7 +24,7 @@ No secrets have defaults or belong in the repository. Put local values in your s
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `LEARNOO_DATABASE_URL` | `serve`, `migrate`, `create-user` | PostgreSQL URL, e.g. `postgres://learnoo@127.0.0.1:5432/learnoo?sslmode=disable` |
+| `LEARNOO_DATABASE_URL` | `serve`, `migrate` and every operator command | PostgreSQL URL, e.g. `postgres://learnoo@127.0.0.1:5432/learnoo?sslmode=disable` |
 | `LEARNOO_ADDR` | `serve` | Listen address. Default `127.0.0.1:8090`. Only loopback addresses are accepted until deployment work defines TLS and the proxy chain |
 | `LEARNOO_TEST_DATABASE_URL` | `go test` | Disposable database for database-backed tests. Unset: those tests are skipped |
 | `LEARNOO_REQUIRE_DB_TESTS` | `go test` | `1` makes database-backed tests fail instead of skip when the URL is missing (CI sets it) |
@@ -52,7 +52,34 @@ read -rs PW && printf '%s\n' "$PW" | go run ./cmd/server create-user -email you@
 go run ./cmd/server serve             # http://127.0.0.1:8090
 ```
 
-`serve` refuses to start while migrations are pending or the applied history differs from the files. `create-user` reads the password (12 to 1024 characters) from stdin so it never appears in shell history or process lists; it creates an account with no permissions (a Student) and is not public registration. Granting permissions from the command line arrives with LRN-013; until then the Go API (`internal/permissions`) is used by tests only.
+`serve` refuses to start while migrations are pending or the applied history differs from the files. `create-user` reads the password (12 to 1024 characters) from stdin so it never appears in shell history or process lists; it creates an account with no permissions (a Student) and is not public registration.
+
+### Operator commands: first administrator and permissions
+
+These commands act as the trusted local operator (audited with no actor): anyone who can run them against the database is trusted ([DECISIONS.md](DECISIONS.md#role-administration-cli-lrn-013)). There is no HTTP equivalent. Every command refuses to run while migrations are pending, validates its arguments before changing anything, and exits non-zero with a message on any error.
+
+Bootstrap the first administrator on a new database (account plus `administrator`, `publisher`, `author`, each audited, in one transaction). It is refused while any active administrator exists, including when two runs race:
+
+```sh
+read -rs PW && printf '%s\n' "$PW" | go run ./cmd/server bootstrap-admin -email admin@example.test -name 'Admin Name'; unset PW
+```
+
+Grant or revoke a global permission (`author`, `publisher`, `administrator`) by email, or `reviewer` for one subject by its `subjects.code` (subjects are created by LRN-014; none are seeded yet):
+
+```sh
+go run ./cmd/server grant  -email teacher@example.test -permission author
+go run ./cmd/server grant  -email teacher@example.test -permission reviewer -subject math
+go run ./cmd/server revoke -email teacher@example.test -permission reviewer -subject math
+go run ./cmd/server revoke -email teacher@example.test -permission publisher
+```
+
+Each effective change writes one `permission_audit` row in the same transaction. Repeating a grant or revoke prints `no change: … already holds …` or `no change: … does not hold …`, exits 0 and writes no audit row. Rejected: an unknown email, permission or subject code, `reviewer` without `-subject`, and a global permission with `-subject`. Revoking `administrator` from the last active administrator (holds `administrator`, account not disabled) is refused; grant it to someone else first.
+
+Show a user's stored permissions, reviewer subjects and permission audit history (read-only):
+
+```sh
+go run ./cmd/server show-user -email teacher@example.test
+```
 
 Try it (curl stores `Secure` cookies for `127.0.0.1`; browsers do the same for loopback):
 
@@ -75,11 +102,11 @@ go test ./...
 go vet ./...
 ```
 
-With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection. They use simulated users only.
+With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection, the operator commands (bootstrap, grant, revoke, show-user, invalid input leaving the database unchanged), concurrent bootstrap and concurrent revocation of the last two administrators, and a source check that only `cmd/server` calls the permission-changing methods. They use simulated users only. Run the concurrency tests under the race detector with `go test -race ./internal/... ./cmd/server`.
 
 ### Pending
 
-Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). Not yet implemented: the role administration CLI (LRN-013), self-approval prevention in review (LRN-007), curriculum data for subjects beyond a bare identifier (LRN-014). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
+Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). The operator CLI above administers them (LRN-013). Not yet implemented: the web admin console (LRN-019), self-approval prevention in review (LRN-007), curriculum data for subjects beyond a bare identifier (LRN-014). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
 
 ## Local renderer experiment
 
