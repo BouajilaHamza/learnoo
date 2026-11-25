@@ -94,9 +94,12 @@ func wantOut(t *testing.T, out, want string) {
 
 func TestBootstrapAdminCommand(t *testing.T) {
 	c := newCLI(t)
+	// Bootstrap must preserve the catalogue already seeded by migrations.
+	subjectsBefore := c.count(`SELECT count(*) FROM subjects`)
 	out := c.ok(cliPassword, "bootstrap-admin", "-email", "Admin@Example.test", "-name", "Simulated Admin")
 	wantOut(t, out, "created administrator")
-	if got := c.snapshot(); got != "users=1 user_permissions=3 reviewer_assignments=0 permission_audit=3 subjects=0 sessions=0 disabled=0" {
+	want := fmt.Sprintf("users=1 user_permissions=3 reviewer_assignments=0 permission_audit=3 subjects=%d sessions=0 disabled=0", subjectsBefore)
+	if got := c.snapshot(); got != want {
 		t.Fatalf("after bootstrap: %s", got)
 	}
 	if n := c.count(`SELECT count(*) FROM permission_audit WHERE actor_id IS NULL AND action = 'grant' AND subject_id IS NULL`); n != 3 {
