@@ -1,0 +1,84 @@
+-- LRN-005 permissions (role model confirmed 2026-11-24, docs/DECISIONS.md "Role model").
+-- Four independent permissions. author, publisher and administrator are global;
+-- reviewer is granted per subject. No permission implies another.
+--
+-- The append-only triggers on permission_audit constrain only roles that
+-- neither own the table nor are superusers: the owner can drop or disable
+-- the triggers, and a superuser can also skip them (session_replication_role).
+-- The deployed application must therefore connect as a least-privilege role
+-- that does not own these tables (deployment work, LRN-010).
+-- Grant and audit times default to now(), the transaction time.
+
+-- Minimal subject identifier, only so reviewer grants have a scope to reference.
+-- LRN-014 extends it (section, names, seed). No rows are seeded here.
+CREATE TABLE subjects (
+    id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    code       text        NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    CONSTRAINT subjects_code_format CHECK (code ~ '^[a-z0-9][a-z0-9-]{0,62}$')
+);
+
+CREATE UNIQUE INDEX subjects_code_key ON subjects (code);
+
+CREATE TABLE user_permissions (
+    user_id    bigint      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    permission text        NOT NULL,
+    granted_at timestamptz NOT NULL DEFAULT now(),
+    -- NULL means the grant was made by an operator tool, not a signed-in user;
+    -- the operator label is in the matching permission_audit row.
+    granted_by bigint      REFERENCES users (id) ON DELETE SET NULL,
+    PRIMARY KEY (user_id, permission),
+    CONSTRAINT user_permissions_global CHECK (permission IN ('author', 'publisher', 'administrator'))
+);
+
+CREATE TABLE reviewer_assignments (
+    user_id    bigint      NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    subject_id bigint      NOT NULL REFERENCES subjects (id) ON DELETE RESTRICT,
+    granted_at timestamptz NOT NULL DEFAULT now(),
+    granted_by bigint      REFERENCES users (id) ON DELETE SET NULL,
+    PRIMARY KEY (user_id, subject_id)
+);
+
+CREATE INDEX reviewer_assignments_subject_idx ON reviewer_assignments (subject_id);
+
+-- Append-only record of every grant and revoke. Users and subjects referenced
+-- here cannot be deleted while audit rows exist; deletion policy is LRN-022.
+CREATE TABLE permission_audit (
+    id             bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    occurred_at    timestamptz NOT NULL DEFAULT now(),
+    -- Exactly one of actor_id (a signed-in administrator) and operator_label
+    -- (a self-asserted local operator identity, e.g. user@host) is set.
+    actor_id       bigint      REFERENCES users (id),
+    operator_label text,
+    target_user_id bigint      NOT NULL REFERENCES users (id),
+    action         text        NOT NULL CHECK (action IN ('grant', 'revoke')),
+    permission     text        NOT NULL CHECK (permission IN ('author', 'reviewer', 'publisher', 'administrator')),
+    subject_id     bigint      REFERENCES subjects (id),
+    CONSTRAINT permission_audit_scope CHECK ((permission = 'reviewer') = (subject_id IS NOT NULL)),
+    CONSTRAINT permission_audit_actor CHECK ((actor_id IS NULL) = (operator_label IS NOT NULL)),
+    CONSTRAINT permission_audit_operator_label CHECK (
+        char_length(operator_label) BETWEEN 1 AND 200
+        AND operator_label = btrim(operator_label)
+        -- No control (Cc), format (Cf: invisible and bidirectional controls)
+        -- or line/paragraph separator (Zl, Zp) characters, as of Unicode 15,
+        -- listed by code point so the check does not depend on the locale.
+        -- OperatorAs in internal/permissions rejects at least these.
+        AND operator_label !~ E'[\\u0001-\\u001F\\u007F-\\u009F\\u00AD\\u0600-\\u0605\\u061C\\u06DD\\u070F\\u0890-\\u0891\\u08E2\\u180E\\u200B-\\u200F\\u2028-\\u202E\\u2060-\\u2064\\u2066-\\u206F\\uFEFF\\uFFF9-\\uFFFB\\U000110BD\\U000110CD\\U00013430-\\U0001343F\\U0001BCA0-\\U0001BCA3\\U0001D173-\\U0001D17A\\U000E0001\\U000E0020-\\U000E007F]')
+);
+
+CREATE INDEX permission_audit_target_idx ON permission_audit (target_user_id, occurred_at);
+
+CREATE FUNCTION permission_audit_append_only() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+    RAISE EXCEPTION 'permission_audit is append-only';
+END;
+$$;
+
+CREATE TRIGGER permission_audit_no_update_delete
+    BEFORE UPDATE OR DELETE ON permission_audit
+    FOR EACH ROW EXECUTE FUNCTION permission_audit_append_only();
+
+CREATE TRIGGER permission_audit_no_truncate
+    BEFORE TRUNCATE ON permission_audit
+    FOR EACH STATEMENT EXECUTE FUNCTION permission_audit_append_only();
