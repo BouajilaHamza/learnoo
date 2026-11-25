@@ -23,7 +23,7 @@ KaTeX accounts for most of the initial payload. Before public delivery, measure 
 
 ## Verification
 
-Go race tests and `go vet` pass. Seven browser tests pass, covering mobile (including 375px compact mobile viewport) and RTL layout, expandable solutions, canonical reader/preview equality, local JSON save/reopen, unsafe markup, invalid formulas and unavailable KaTeX. Desktop and mobile screenshots were inspected. Long formulas can scroll within their own block without widening the page. Bidirectional inline math text and display formulas maintain directional isolation with explicit `dir="ltr"` and `unicode-bidi: isolate`.
+Go race tests and `go vet` pass. Eight renderer browser tests pass, covering mobile (including 375px compact mobile viewport) and RTL layout, expandable solutions, canonical reader/preview equality, local JSON save/reopen, unsafe markup, invalid formulas and unavailable KaTeX. Desktop and mobile screenshots were inspected. Long formulas can scroll within their own block without widening the page. Bidirectional inline math text and display formulas maintain directional isolation with explicit `dir="ltr"` and `unicode-bidi: isolate`.
 
 The JSON decoder rejects unknown fields, unsafe node/media types, invalid nesting, oversized documents and excess depth. HTML is escaped, KaTeX trust is disabled, and loopback host checks and CSP constrain the local experiment. These checks are not a production security audit.
 
