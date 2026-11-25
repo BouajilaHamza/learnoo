@@ -80,7 +80,7 @@ With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isola
 
 ### Pending
 
-Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). Not yet implemented: the role administration CLI (LRN-013), self-approval prevention in review (LRN-007), curriculum data for subjects beyond a bare identifier (LRN-014). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented. Image validation and content-addressed storage exist in `internal/media` (see [DECISIONS.md](DECISIONS.md#media-upload-limits-lrn-006)) but are not wired to the server: the media directory will be configured by a variable such as `LEARNOO_MEDIA_DIR` on a persistent volume, and there are no upload or serving endpoints yet. Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
+Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). Not yet implemented: the role administration CLI (LRN-013), self-approval prevention in review (LRN-007), validated curriculum chapters (LRN-014). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented. Image validation and content-addressed storage exist in `internal/media` (see [DECISIONS.md](DECISIONS.md#media-upload-limits-lrn-006)) but are not wired to the server: the media directory will be configured by a variable such as `LEARNOO_MEDIA_DIR` on a persistent volume, and there are no upload or serving endpoints yet. Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
 
 ## Local renderer experiment
 
@@ -176,3 +176,7 @@ Schema allowlists, escaped templates, local image allowlists, content/depth/form
 ### Dependency licensing
 
 KaTeX, React, TipTap, Vite and Vitest are MIT-licensed; Playwright and TypeScript are Apache-2.0-licensed; their own terms apply. The project's interim notice does not override dependencies. `scripts/copy-katex.mjs` preserves the KaTeX license in the generated vendor directory.
+
+## Catalogue foundation checks
+
+Migration 0003 adds sections and chapters and seeds only the confirmed mathematics section and subject. It deliberately creates no chapters or coefficient claims. Run `go test ./internal/curriculum` with `LEARNOO_TEST_DATABASE_URL` pointing at a disposable PostgreSQL database and `LEARNOO_REQUIRE_DB_TESTS=1`; without the database, ordinary local runs skip those tests. The suite checks the bounded seed, query filtering/order, optional explanations, legacy subject scopes and referential integrity using unreviewed synthetic records. Educational evidence requirements are in [CURRICULUM_TUNISIA.md](CURRICULUM_TUNISIA.md).
