@@ -2,7 +2,7 @@
 
 Two programs live in this repository and stay separate:
 
-- `cmd/server`: the application server (LRN-005 foundation): PostgreSQL, migrations, accounts, sessions and login. Authentication and server-side permission checks; no lessons yet.
+- `cmd/server`: the application server: PostgreSQL, migrations, accounts, sessions and login (LRN-005), server-side permission checks, operator commands (LRN-013), and the Studio API for lesson drafts and media (LRN-006). No review, publication or reader pages yet.
 - `cmd/renderer`: the loopback-only renderer experiment (LRN-004), below. It has no accounts or database and does not share code paths with the server.
 
 ## Application server
@@ -25,7 +25,8 @@ No secrets have defaults or belong in the repository. Put local values in your s
 
 | Variable | Used by | Meaning |
 | --- | --- | --- |
-| `LEARNOO_DATABASE_URL` | `serve`, `migrate`, `create-user` | PostgreSQL URL, e.g. `postgres://learnoo@127.0.0.1:5432/learnoo?sslmode=disable` |
+| `LEARNOO_DATABASE_URL` | `serve`, `migrate` and every operator command | PostgreSQL URL, e.g. `postgres://learnoo@127.0.0.1:5432/learnoo?sslmode=disable` |
+| `LEARNOO_MEDIA_DIR` | `serve` | Required. Absolute path of the persistent directory for uploaded images (created 0750 if missing). No default, so uploads never land in the repository or working directory. Must support hard links; back it up with the database |
 | `LEARNOO_ADDR` | `serve` | Listen address. Default `127.0.0.1:8090`. Only loopback addresses are accepted until deployment work defines TLS and the proxy chain |
 | `LEARNOO_TEST_DATABASE_URL` | `go test` | Disposable database for database-backed tests. Unset: those tests are skipped |
 | `LEARNOO_REQUIRE_DB_TESTS` | `go test` | `1` makes database-backed tests fail instead of skip when the URL is missing (CI sets it) |
@@ -50,10 +51,48 @@ Option B, an existing local PostgreSQL 16 (for example Homebrew `postgresql@16`)
 go run ./cmd/server migrate           # apply pending migrations; safe to repeat
 go run ./cmd/server migrate -check    # exit non-zero if anything is pending or was edited
 read -rs PW && printf '%s\n' "$PW" | go run ./cmd/server create-user -email you@example.test -name 'Your Name'; unset PW
-go run ./cmd/server serve             # http://127.0.0.1:8090
+LEARNOO_MEDIA_DIR="$HOME/.local/share/learnoo/media" go run ./cmd/server serve   # http://127.0.0.1:8090
 ```
 
-`serve` refuses to start while migrations are pending or the applied history differs from the files. `create-user` reads the password (12 to 1024 characters) from stdin so it never appears in shell history or process lists; it creates an account with no permissions (a Student) and is not public registration. Granting permissions from the command line arrives with LRN-013; until then the Go API (`internal/permissions`) is used by tests only.
+`serve` refuses to start while migrations are pending or the applied history differs from the files. `create-user` reads the password (12 to 1024 characters) from stdin so it never appears in shell history or process lists; it creates an account with no permissions (a Student) and is not public registration.
+
+### Operator commands: first administrator, permissions and account status
+
+These commands act as the trusted local operator: anyone who can run them against the database is trusted ([DECISIONS.md](DECISIONS.md#role-administration-cli-lrn-013)). Changes are audited with no actor and the self-asserted `<os user>@<hostname>` label of the machine running the command. There is no HTTP equivalent. Every command refuses to run while migrations are pending, validates its arguments before changing anything, and exits non-zero with a message on any error. Secrets are never command-line arguments: passwords are read from stdin.
+
+Bootstrap the first administrator on a new database (account plus `administrator`, `publisher`, `author`, each audited, in one transaction). It is refused while any active administrator exists, including when two runs race:
+
+```sh
+read -rs PW && printf '%s\n' "$PW" | go run ./cmd/server bootstrap-admin -email admin@example.test -name 'Admin Name'; unset PW
+```
+
+`bootstrap-admin` always creates a new account; if the email is already registered it is refused and nothing changes. To make an existing account the first administrator, grant `administrator`, `publisher` and `author` to it with `grant` (below).
+
+Grant or revoke a global permission (`author`, `publisher`, `administrator`) by email, or `reviewer` for one subject by its `subjects.code` (trimmed and lower-cased, like emails; subjects are created by LRN-014, none are seeded yet):
+
+```sh
+go run ./cmd/server grant  -email teacher@example.test -permission author
+go run ./cmd/server grant  -email teacher@example.test -permission reviewer -subject math
+go run ./cmd/server revoke -email teacher@example.test -permission reviewer -subject math
+go run ./cmd/server revoke -email teacher@example.test -permission publisher
+```
+
+Each effective change writes one `permission_audit` row in the same transaction. Repeating a grant or revoke prints `no change: … already holds …` or `no change: … does not hold …`, exits 0 and writes no audit row. Rejected: an unknown email, permission or subject code, `reviewer` without `-subject`, and a global permission with `-subject`. Revoking `administrator` from the last active administrator (holds `administrator`, account not disabled) is refused; grant it to someone else first.
+
+Disable or re-enable an account by email:
+
+```sh
+go run ./cmd/server disable-user -email teacher@example.test
+go run ./cmd/server enable-user  -email teacher@example.test
+```
+
+Disabling sets `users.disabled_at` and deletes the account's sessions in one transaction; the account can no longer sign in (login answers `invalid_credentials`, as for a wrong password) and holds no effective permissions, but its grants stay stored and apply again once it is enabled. Enabling also deletes any sessions, so the account starts signed out. Each effective change writes one `account_status_audit` row with the operator label; repeating a command prints `no change: … is already disabled` or `… already enabled`, exits 0 and writes no audit row. Disabling the last active administrator is refused; grant `administrator` to another active account first.
+
+Show a user's status, stored permissions, reviewer subjects, permission audit and account status audit history, with the operator label or user id of each change (read-only):
+
+```sh
+go run ./cmd/server show-user -email teacher@example.test
+```
 
 Try it (curl stores `Secure` cookies for `127.0.0.1`; browsers do the same for loopback):
 
@@ -63,7 +102,31 @@ curl -s -c jar -H 'Content-Type: application/json' \
 curl -s -b jar http://127.0.0.1:8090/api/auth/session
 ```
 
-Endpoints, errors, CSRF and throttling are specified in [API.md](API.md).
+Studio endpoints need the `author` permission. Grant it with the operator command above:
+
+```sh
+go run ./cmd/server grant -email you@example.test -permission author
+```
+
+Then sign in and call the Studio API. The password and CSRF token are passed on stdin, never as command-line arguments (`-H @-` reads headers from stdin; curl 7.55 or newer):
+
+```sh
+read -rs PW && printf '{"email":"you@example.test","password":"%s"}' "$PW" \
+  | curl -s -c jar -H 'Content-Type: application/json' --data-binary @- \
+      http://127.0.0.1:8090/api/auth/login > session.json; unset PW
+CSRF=$(sed -n 's/.*"csrfToken":"\([^"]*\)".*/\1/p' session.json)
+# lesson.json: {"subjectId": 1, "language": "fr", "content": {…schema v1 document…}}
+printf 'X-CSRF-Token: %s\n' "$CSRF" | curl -s -b jar -H @- -H 'Content-Type: application/json' \
+  --data-binary @lesson.json http://127.0.0.1:8090/api/lessons
+printf 'X-CSRF-Token: %s\n' "$CSRF" | curl -s -b jar -H @- -H 'Content-Type: image/png' \
+  --data-binary @diagram.png http://127.0.0.1:8090/api/media
+curl -s -b jar -o served.png http://127.0.0.1:8090/api/media/1
+rm -f jar session.json
+```
+
+Subjects (and chapters) have no seed or endpoint yet (LRN-014); insert simulated rows such as `INSERT INTO subjects (code) VALUES ('simulated-math')` locally.
+
+Endpoints, errors, CSRF, authorization and throttling are specified in [API.md](API.md).
 
 ### Migrations
 
@@ -76,11 +139,11 @@ go test ./...
 go vet ./...
 ```
 
-With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, strict login JSON (exact, unique keys), per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection. They use simulated users only.
+With `LEARNOO_TEST_DATABASE_URL` set, each database-backed test creates an isolated schema, migrates it and drops it afterwards, so tests may run in parallel and leave nothing behind. They cover migration repeatability and tamper detection, cookie attributes, enumeration-safe errors, anonymous access, idle and absolute expiry, rotation on login, logout revocation, CSRF rejection, strict login JSON (exact, unique keys), per-account and per-address throttling and concurrent attempts, plus permission deny-by-default, per-subject reviewer scope, no implied permissions (reviewer never implies publisher), administrator-only grants, audit records and their append-only protection, the operator commands (bootstrap, grant, revoke, disable-user, enable-user, show-user, invalid input leaving the database unchanged, the operator label in both audits), account disable and enable (session revocation, enable purging sessions, the last-administrator refusal, the status audit's exactly-one-actor and label constraints and its append-only protection), concurrent bootstrap, concurrent revocations and disables of the last two administrators in every mix (by the operator, and by the two administrators acting on each other, which must not deadlock), logins racing a disable (no session survives, the refused login is indistinguishable from a bad password), and type-checked source scans. One scan fails if `internal/server` or any module package it imports refers to `permissions.OperatorAs`. The other, over every module package, allows `permissions.Store` change methods and `OperatorAs` only in `cmd/server/main.go` and `internal/permissions/permissions.go`, allows `accounts.Store.Disable` and `Enable` only in `cmd/server/main.go`, flags any of them inside any function taking an `http.ResponseWriter`, flags SQL literals that write `user_permissions`, `reviewer_assignments` or `permission_audit` outside `internal/permissions`, and flags SQL literals that write `account_status_audit` or set `users.disabled_at` outside `internal/accounts` (disabling an account can remove an active administrator, so it must go through the last-administrator guard). Self-tests check the rules against probe handlers and type-checked probe files. Method calls, method values, method expressions and methods promoted by embedding are resolved by type; table names may be schema-qualified or quoted. The scans guard against accidental paths, not a proof: they cannot see calls through interfaces or SQL built by concatenation or at run time. A route test only checks that a few plausible admin paths return 404. Lesson persistence tests (LRN-006) cover foreign-key and uniqueness rejections, concurrent draft creation (exactly one succeeds), concurrent saves of one draft version (one wins, the other conflicts), submitted snapshots unchanged after Store and direct SQL edits, submission racing a media change, revoked and disabled authors refused on their next call, near-limit documents that save and submit, canonical stored content (case-folded duplicate keys refused, spacing and key order normalised, non-canonical stored content refused at submission), approved-only publication pointers, approved-unpublished revisions blocking new drafts until publication (including publication racing draft creation, and restoration of an earlier revision), the once-only `candidate_closed_at` rule (including a non-owner role with only DML grants and `TEMP` trying a temporary trigger), translation subject rules, draft discard, never-reused revision numbers, changes-requested successors, an untouched published pointer, author/ownership denials (only the lesson's owner holding `author` starts a draft or translation: another author, an administrator with or without `author`, the owner without `author` and a disabled owner are refused; direct SQL by a non-owner, a `REPEATABLE READ`/`SERIALIZABLE` writer with a stale snapshot, and temporary shadow tables are refused by the database guards), schema v1 rejection before storage, immutable media rows, and temporary shadow tables for every guard. The Studio API tests (LRN-006) run through the real server handler: anonymous 401, CSRF and cross-origin rejection, 403 for accounts without `author`, enumeration-safe 404 for other authors' revisions and for drafts or translations of lessons the caller does not own, create/save/submit/discard, stale saves (409, winner intact), saves after submission, concurrent draft creation over HTTP, invalid and oversized bodies storing nothing, translations, strict JSON bodies (case-sensitive, duplicate-free keys, nothing after the object), clean validation messages (NUL, wrong types), image upload and de-duplication (including concurrent identical uploads and cross-author uploads keeping the first uploader), object-scoped media reads and references, the in-transaction `author` recheck on upload, slow uploads hitting the read timeout (408), SVG/GIF/type-mismatch/trailing-data/oversized rejections without unbounded reads, media serving headers, and media ID tampering. Where a lesson or Studio test needs a decided or published revision it simulates it with direct SQL, inserting the review decision or publication audit row the database requires in the same transaction; raw pointer updates without an audit row are refused by the approved-only guard and, for approved revisions, by the audit guard. Review and publication (LRN-007) tests cover approval and change requests (comment required, trimmed, bounded), denials for anonymous callers, author-only, publisher-only, administrator-only and disabled accounts and reviewers of another subject, self-approval rejected for administrators in the store, the HTTP API and the database, decisions only on revisions in review, concurrent approve/request-changes on one revision (exactly one applied), publication with its audit chain, publication denials (author, reviewer without `publisher`, disabled publisher), unapproved, already-published and archived revisions, stale bases after a simulated unpublication or restoration (409, nothing changed), concurrent publications of one revision and of many lessons (one success each, one audit row, no lost pointer update), revocation and disablement committed before the in-transaction recheck (denied, nothing written, also through the HTTP handler) and revocation after it (waits for the write, denies the next request), append-only decision and publication audit (update, delete and truncate refused), decision/status and audit/pointer atomicity (each without the other, mismatched status, forced failure, backdated rows, forged transaction ID, reused audit row), the reviewer queue and reviewer reads (subject scope, own revisions excluded, revocation), and a non-owner role with temporary shadow tables for every new guard. Over HTTP they cover each review and publication endpoint: anonymous 401, CSRF and cross-origin rejection, 403 before lookup, enumeration-safe 404 for other subjects (revisions and media), the full submit, request changes, successor, approve, publish cycle with author feedback and `approvedBy`, stale-base 409, strict JSON bodies and query validation. They use simulated users, subjects, chapters and `unreviewed` test documents only. Media tests write to `t.TempDir()`. Run the concurrency tests under the race detector with `go test -race ./internal/permissions ./internal/accounts ./internal/auth ./internal/lessons ./internal/media ./internal/review ./internal/studioapi ./internal/server ./cmd/server`.
 
 ### Pending
 
-Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). Not yet implemented: the role administration CLI (LRN-013), self-approval prevention in review (LRN-007), curriculum data for subjects beyond a bare identifier (LRN-014). Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented. Image validation and content-addressed storage exist in `internal/media` (see [DECISIONS.md](DECISIONS.md#media-upload-limits-lrn-006)) but are not wired to the server: the media directory will be configured by a variable such as `LEARNOO_MEDIA_DIR` on a persistent volume, and there are no upload or serving endpoints yet. Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
+Permissions are implemented in `internal/permissions` and `migrations/0002_permissions.sql` (see [API.md](API.md#permissions)). The operator commands above administer them (LRN-013). Lesson persistence (LRN-006 slice 1) is implemented in `internal/lessons` and `migrations/0004_lessons.sql`; see [DECISIONS.md](DECISIONS.md#lesson-persistence-lrn-006). Image validation and content-addressed storage (slice 2) are in `internal/media`; see [DECISIONS.md](DECISIONS.md#media-upload-limits-lrn-006). The Studio API for drafts and media (slice 3) is in `internal/studioapi`, mounted by `internal/server`, with media access links in `migrations/0005_media_uploads.sql`; see [API.md](API.md#studio-lesson-drafts-and-media-lrn-006) and [DECISIONS.md](DECISIONS.md#studio-api-lrn-006). The Studio UI (`web/studio`) is not connected to it yet. Its database guards (triggers and constraints) bind only a role that is neither a superuser nor the owner of the tables; locally and in tests one role owns the schema and runs the server, so the guards are not a security boundary there. Deployment (LRN-010) must add a separate least-privilege runtime role distinct from the migration owner, put `LEARNOO_MEDIA_DIR` on a persistent, backed-up volume, and configure the CDN so `/api/` (including media) bypasses shared caches. A draft whose author lost the `author` permission blocks new drafts of its lesson until an administrative discard exists (LRN-019/issue 9). Review decisions, reviewer access and publication (LRN-007) are in `internal/review` and `internal/studioapi/review.go`, with `migrations/0006_review_publication.sql`; see [API.md](API.md#review-and-publication-lrn-007) and [DECISIONS.md](DECISIONS.md#review-and-publication-lrn-007). Not yet implemented: Studio integration with the API, a lesson/draft listing endpoint, catalogue endpoints and seed (LRN-014), reader access to revisions and media (LRN-008), unpublication, withdrawal and restoration (LRN-009), the web admin console (LRN-019), a publisher queue, cleanup of unreferenced media files. Registration, recovery, verification, deletion (LRN-022), deployment, TLS termination and trusted-proxy client addresses are not implemented.
 
 ## Local renderer experiment
 

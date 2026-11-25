@@ -67,7 +67,7 @@ func TestMigrateAndCreateUserCommands(t *testing.T) {
 	if err := run([]string{"migrate"}, nil, &out, log); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "applied 0001_identity.sql") {
+	if !strings.Contains(out.String(), "applied 0001_identity.sql") || !strings.Contains(out.String(), "applied 0003_account_status.sql") {
 		t.Fatalf("output: %s", out.String())
 	}
 	out.Reset()
@@ -90,5 +90,22 @@ func TestMigrateAndCreateUserCommands(t *testing.T) {
 	}
 	if !strings.HasPrefix(hash, "$argon2id$") || strings.Contains(hash, "simulated-password-2") {
 		t.Fatalf("unexpected stored hash %q", hash)
+	}
+}
+
+func TestServeRequiresAbsoluteMediaDir(t *testing.T) {
+	t.Setenv("LEARNOO_DATABASE_URL", "")
+	t.Setenv("LEARNOO_ADDR", "")
+	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	for dir, want := range map[string]string{
+		"":            "LEARNOO_MEDIA_DIR is not set",
+		"media":       "must be an absolute path",
+		"./tmp/media": "must be an absolute path",
+	} {
+		t.Setenv("LEARNOO_MEDIA_DIR", dir)
+		err := run([]string{"serve"}, strings.NewReader(""), io.Discard, log)
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Errorf("LEARNOO_MEDIA_DIR=%q: got %v, want %q", dir, err, want)
+		}
 	}
 }
