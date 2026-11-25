@@ -33,12 +33,12 @@ type Subject struct {
 	Code        string    `json:"code"`
 	TitleFR     string    `json:"titleFr,omitempty"`
 	TitleAR     string    `json:"titleAr,omitempty"`
-	Coefficient int       `json:"coefficient"`
+	Coefficient *int      `json:"coefficient"`
 	SortOrder   int       `json:"sortOrder"`
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
-// Chapter represents an official curriculum chapter with bilingual and Tunisian Derja notes.
+// Chapter represents a catalogue entry; educational validation is a separate process.
 type Chapter struct {
 	ID            int64     `json:"id"`
 	SubjectID     int64     `json:"subjectId"`
@@ -62,7 +62,7 @@ func NewStore(db *pgxpool.Pool) *Store {
 	return &Store{db: db}
 }
 
-// ListSections returns all registered Tunisian Baccalauréat sections.
+// ListSections returns the registered pilot sections.
 func (s *Store) ListSections(ctx context.Context) ([]Section, error) {
 	rows, err := s.db.Query(ctx, `
 		SELECT id, code, title_fr, title_ar, created_at
@@ -89,7 +89,7 @@ func (s *Store) ListSubjects(ctx context.Context, sectionCode string) ([]Subject
 	query := `
 		SELECT s.id, s.section_id, COALESCE(sec.code, ''), s.code,
 		       COALESCE(s.title_fr, ''), COALESCE(s.title_ar, ''),
-		       COALESCE(s.coefficient, 1), COALESCE(s.sort_order, 0), s.created_at
+		       s.coefficient, COALESCE(s.sort_order, 0), s.created_at
 		  FROM subjects s
 		  LEFT JOIN sections sec ON sec.id = s.section_id
 	`
