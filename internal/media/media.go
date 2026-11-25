@@ -20,6 +20,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/jpeg"
 	"image/png"
 	"io"
@@ -193,6 +194,11 @@ func Process(ctx context.Context, r io.Reader, declaredType string) (*Asset, err
 	b := img.Bounds()
 	if b.Dx() != cfg.Width || b.Dy() != cfg.Height {
 		return nil, fmt.Errorf("%w: header and decoded dimensions differ", ErrCorrupt)
+	}
+
+	if orient := readOrientation(raw); orient > 1 {
+		img = applyOrientation(img, orient)
+		b = img.Bounds()
 	}
 
 	var out bytes.Buffer
@@ -395,4 +401,133 @@ func checkWebPStructure(b []byte) error {
 		return fmt.Errorf("%w: webp chunk list malformed", ErrCorrupt)
 	}
 	return nil
+}
+
+// readOrientation scans JPEG marker segments for an APP1 Exif segment containing
+// TIFF tag 0x0112 (Orientation). Returns 1 if unoriented or not found.
+func readOrientation(b []byte) int {
+	if len(b) < 4 || b[0] != 0xFF || b[1] != 0xD8 {
+		return 1
+	}
+	pos := 2
+	n := len(b)
+	for pos < n-4 {
+		if b[pos] != 0xFF {
+			return 1
+		}
+		for pos < n && b[pos] == 0xFF {
+			pos++
+		}
+		if pos >= n {
+			return 1
+		}
+		m := b[pos]
+		pos++
+		if m == 0xDA || m == 0xD9 { // SOS or EOI
+			break
+		}
+		if m == 0x01 || (m >= 0xD0 && m <= 0xD7) {
+			continue
+		}
+		if pos+2 > n {
+			return 1
+		}
+		length := int(binary.BigEndian.Uint16(b[pos:]))
+		if length < 2 || pos+length > n {
+			return 1
+		}
+		if m == 0xE1 && length >= 14 { // APP1 Exif
+			payload := b[pos+2 : pos+length]
+			if len(payload) >= 6 && string(payload[:6]) == "Exif\x00\x00" {
+				return parseTIFFOrientation(payload[6:])
+			}
+		}
+		pos += length
+	}
+	return 1
+}
+
+func parseTIFFOrientation(tiff []byte) int {
+	if len(tiff) < 8 {
+		return 1
+	}
+	var bo binary.ByteOrder
+	if tiff[0] == 'I' && tiff[1] == 'I' {
+		bo = binary.LittleEndian
+	} else if tiff[0] == 'M' && tiff[1] == 'M' {
+		bo = binary.BigEndian
+	} else {
+		return 1
+	}
+	if bo.Uint16(tiff[2:]) != 42 {
+		return 1
+	}
+	ifdOffset := int(bo.Uint32(tiff[4:]))
+	if ifdOffset < 8 || ifdOffset > len(tiff)-2 {
+		return 1
+	}
+	numEntries := int(bo.Uint16(tiff[ifdOffset:]))
+	entryPos := ifdOffset + 2
+	for i := 0; i < numEntries; i++ {
+		if entryPos+12 > len(tiff) {
+			break
+		}
+		tag := bo.Uint16(tiff[entryPos:])
+		if tag == 0x0112 && bo.Uint16(tiff[entryPos+2:]) == 3 && bo.Uint32(tiff[entryPos+4:]) == 1 { // one SHORT Orientation
+			val := int(bo.Uint16(tiff[entryPos+8:]))
+			if val >= 1 && val <= 8 {
+				return val
+			}
+		}
+		entryPos += 12
+	}
+	return 1
+}
+
+// orientedImage exposes transformed pixels without allocating another full-size
+// image. The encoder consumes this view while the decode semaphore is held.
+type orientedImage struct {
+	source      image.Image
+	orientation int
+	bounds      image.Rectangle
+}
+
+func (i orientedImage) ColorModel() color.Model { return i.source.ColorModel() }
+func (i orientedImage) Bounds() image.Rectangle { return i.bounds }
+func (i orientedImage) At(x, y int) color.Color {
+	if !image.Pt(x, y).In(i.bounds) {
+		return color.RGBA{}
+	}
+	b := i.source.Bounds()
+	w, h := b.Dx(), b.Dy()
+	switch i.orientation {
+	case 2:
+		x = w - 1 - x
+	case 3:
+		x, y = w-1-x, h-1-y
+	case 4:
+		y = h - 1 - y
+	case 5:
+		x, y = y, x
+	case 6:
+		x, y = y, h-1-x
+	case 7:
+		x, y = w-1-y, h-1-x
+	case 8:
+		x, y = w-1-y, x
+	}
+	return i.source.At(b.Min.X+x, b.Min.Y+y)
+}
+
+// applyOrientation applies all eight EXIF orientations through a pixel view.
+func applyOrientation(source image.Image, orientation int) image.Image {
+	if orientation < 2 || orientation > 8 {
+		return source
+	}
+	b := source.Bounds()
+	w, h := b.Dx(), b.Dy()
+	if orientation >= 5 {
+		w, h = h, w
+	}
+	return orientedImage{source, orientation, image.Rect(0, 0, w, h)}
 }
