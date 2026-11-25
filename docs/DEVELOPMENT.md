@@ -176,3 +176,7 @@ Schema allowlists, escaped templates, local image allowlists, content/depth/form
 ### Dependency licensing
 
 KaTeX, React, TipTap, Vite and Vitest are MIT-licensed; Playwright and TypeScript are Apache-2.0-licensed; their own terms apply. The project's interim notice does not override dependencies. `scripts/copy-katex.mjs` preserves the KaTeX license in the generated vendor directory.
+
+## EXIF orientation regression checks
+
+`go test ./internal/media` and `go test -race ./internal/media` cover all eight JPEG EXIF transforms, both TIFF byte orders, malformed tags, metadata removal and disguised trailing garbage. PNG/JPEG/WebP remain the accepted formats. All appended phone-container data is still rejected; re-export an upright plain JPEG or PNG for the technical pilot. Full phone-container support and the HEIC/HEIF decision remain in issue 42. There is no upload API yet, and these synthetic fixtures do not replace permitted real-device samples.
