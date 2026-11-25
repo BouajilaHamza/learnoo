@@ -1,52 +1,38 @@
-# Évaluation de la Génération Vidéo et Audio Automatisée pour Learnoo
+# Expérience locale de narration vidéo — non validée
 
-Ce document consigne les tests empiriques et l'évaluation technique de la génération automatisée de vidéos de cours pour les programmes du Baccalauréat tunisien (matière : Mathématiques, chapitre : Nombres complexes).
+Statut : prototype technique, non publié et sans validation enseignante. Ce dossier ne constitue ni un cours approuvé, ni une référence officielle du programme tunisien, ni une décision sur les futurs outils pédagogiques.
 
-Deux prototypes vidéo complets (1080p Full HD) et leurs pistes audio respectives ont été générés et sont fournis dans `assets/fixtures/video/`.
+L'expérience initiale comparait deux narrations (Derja et arabe standard avec termes français) sur des images fixes. Les appréciations du contributeur sur le débit et la prononciation sont des observations exploratoires, pas une étude de compréhension ni une validation du niveau scolaire. Aucune conclusion générale sur la valeur pédagogique d'une langue ou d'une technique n'est établie.
 
----
+## Corrections et limites
 
-## 1. Prototypes Fournis
+Les deux narrations utilisent désormais la même liste de diapositives dans `scripts/slides.py`. L'exemple numérique de la quatrième diapositive et la conclusion de la cinquième correspondent à la narration dans les deux variantes. Chaque image porte un avertissement de non-validation. Les chemins de sortie sont fournis en argument ; aucun chemin personnel n'est requis.
 
-| Version | Piste Audio | Fichier Vidéo | Durée | Approche Linguistique | Évaluation Pédagogique |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **V1: Derja Tunisienne** | `cours_nombres_complexes_derja.mp3` | `lesson_nombres_complexes_derja.mp4` | 91s | Derja familière (`ar-TN-HediNeural`) | **Insuffisante (Rejetée)**: Trop informelle, intonation artificielle, inadéquate pour un cours académique formel. |
-| **V2: Arabe Standard (MSA) + Français** | `cours_nombres_complexes_msa.mp3` | `cours_nombres_complexes_msa_video.mp4` | 111s | Arabe académique moderne (الفصحى) + termes techniques en français | **Supérieure**: Posture pédagogique conforme aux lycées pilotes tunisiens, prononciation claire. |
+Les anciens fichiers MP3/MP4 sont retirés de cette proposition : ils précédaient ces corrections et ne prouvent pas le résultat actuel. Ils restent dans l'historique Git. Les scripts actuels doivent être exécutés puis les sorties écoutées et inspectées avant toute nouvelle comparaison. Les identifiants de contenu empêchent de combiner automatiquement des images ou des pistes issues d'une autre version des diapositives.
 
----
+Le rendu emploie du HTML avec des caractères mathématiques simples et les polices locales. Ce n'est pas une mesure de KaTeX. Aucun composant du service Learnoo ne dépend de ce pipeline ; YouTube reste le mode de diffusion prévu.
 
-## 2. Pipeline Technique Utilisé
+## Exécution facultative
 
-Les scripts de génération automatisée sont disponibles dans `docs/fixtures/video-eval/scripts/` :
-1. **`generate_lesson_video.py`** : Génération des diapositives HTML avec rendu mathématique KaTeX, capture d'écran 1920x1080 sans tête (headless Chromium), synthèse vocale neural TTS (`edge-tts`) et assemblage segment par segment.
-2. **`generate_msa_audio.py`** : Synthèse de la piste en Arabe Standard Moderne avec intégration des termes mathématiques français latins (*la forme algébrique*, *la partie réelle*, *la partie imaginaire*, *le conjugué*, *le module*, *l'argument*, *la forme exponentielle*).
-3. **`render_msa_video.py`** : Concaténation de la piste audio maîtresse et multiplexage vidéo H.264 / AAC 1080p via `ffmpeg`.
+Prérequis : Python 3, Chrome/Chromium, `ffmpeg` et l'exécutable `edge-tts` installés séparément. La synthèse vocale transmet les textes à un service externe ; utiliser exclusivement ces textes techniques sans données personnelles. Les versions et les conditions de réutilisation du service et de ses sorties doivent être relevées avant toute diffusion. Les sorties ne sont jamais publiées automatiquement.
 
----
+Depuis la racine du dépôt, remplacer les chemins de sortie et de navigateur selon la machine :
 
-## 3. Limites de la Génération Vidéo Automatisée par IA
+```sh
+# HTML uniquement : hors ligne, sans dépendance Python supplémentaire.
+python3 docs/fixtures/video-eval/scripts/generate_lesson_video.py --output-dir /tmp/learnoo-video --html-only
 
-Bien que le pipeline produise un rendu Full HD synchronisé en quelques minutes, l'évaluation qualitative montre des faiblesses structurelles pour une plateforme éducative rigoureuse :
+# Images, narration Derja et vidéo locale non validée.
+python3 docs/fixtures/video-eval/scripts/generate_lesson_video.py --output-dir /tmp/learnoo-video --chrome google-chrome
 
-1. **Absence de tracé dynamique (Tableau / Manim)** :
-   - Les mathématiques de niveau Baccalauréat s'expliquent par le geste et l'écriture pas-à-pas (décomposition d'une équation, calcul progressif du discriminant ou du module).
-   - Les diapositives statiques créent une charge cognitive excessive pour l'élève.
+# Narration MSA sur les mêmes images, puis assemblage.
+python3 docs/fixtures/video-eval/scripts/generate_msa_audio.py --output-dir /tmp/learnoo-video
+python3 docs/fixtures/video-eval/scripts/render_msa_video.py --output-dir /tmp/learnoo-video
 
-2. **Problématique du bilinguisme franco-arabe (Code-switching)** :
-   - La voix neuronale arabe prononçant des termes latins français produit parfois des heuristiques phonétiques imparfaites sans transcription phonétique rigoureuse.
-   - Les dialectes régionaux (Derja tunisienne brute) manquent de modèles neuronaux académiques calibrés pour l'enseignement secondaire.
+# Contrôles locaux sans réseau ni outils multimédias.
+python3 -m unittest discover -s docs/fixtures/video-eval/scripts -p 'test_*.py'
+```
 
-3. **Rythme et pauses cognitives** :
-   - Un enseignant ajuste son débit selon la difficulté du concept et marque des silences intentionnels. Le TTS automatisé applique un tempo uniforme qui nuit à la rétention.
+Les vidéos générées se trouvent dans `derja/unreviewed-lesson.mp4` et `msa/unreviewed-lesson.mp4` sous le répertoire choisi. Ne pas les enregistrer dans les assets de l'application. Les tests de scripts vérifient les chemins, l'association des segments et les entrées périmées ; ils ne prouvent ni la synchronisation audiovisuelle réelle ni la qualité pédagogique.
 
----
-
-## 4. Recommandations pour Learnoo
-
-1. **Conserver la vidéo humaine sur YouTube** :
-   - Conforme au principe défini dans `docs/ARCHITECTURE.md` ("*YouTube delivers video*").
-   - Privilégier les enregistrements d'enseignants tunisiens réels et qualifiés.
-
-2. **Usage de la synthèse vocale / vidéo IA** :
-   - Utiliser l'audio automatisé uniquement pour l'accessibilité (lecture audio pour malvoyants du contenu texte/KaTeX des fiches de cours).
-   - Ne pas substituer les vidéos pédagogiques interactives par de simples montages automatisés de diapositives statiques.
+Prochaine étape : exécuter le pipeline dans un environnement documenté, écouter et inspecter chaque segment, puis obtenir une revue enseignante indépendante et clarifier les droits avant toute utilisation pédagogique. L'issue 48 reste une discussion exploratoire, pas une nouvelle fonctionnalité du produit.
